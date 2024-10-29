@@ -56,7 +56,7 @@ span.badge-pill + span.badge-pill {
 }
 
 /* left */
-span.badge-pill:first-child:not(:only-child) {
+span.badge-pill:has(+ span.badge-pill) {
     /* Set right border-radius of the first span */
     border-top-right-radius: 2rem !important;
     border-bottom-right-radius: 2rem !important;
