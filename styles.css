@@ -1,0 +1,64 @@
+/* styles.css */
+
+/* Remove hardcoded colors and rely on GitLab's styles */
+.kanban-board {
+    display: flex;
+    /* flex-wrap: wrap; */
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.kanban-column {
+    flex: 1;
+    /* min-width: 300px; */
+    border-style: solid;
+    border-radius: .25rem;
+    border-width: 1px;
+    border-color: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
+    background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd))
+}
+
+.kanban-column-header {
+    padding: 10px;
+    background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
+    color: var(--gl-text-color);
+    font-weight: bold;
+    text-align: center;
+    border-radius: .25rem .25rem 0 0;
+}
+
+.kanban-column-body {
+    padding: 10px !important;
+}
+
+.mr-card {
+    margin-bottom: 10px !important;
+    border-style: solid !important ;
+    border-radius: .5rem !important;
+    border-width: 1px !important;
+    border-color: var(--gl-border-color-default) !important;
+    background-color: var(--gl-background-color-default) !important;
+}
+
+li .issuable-info-container {
+    display: block !important;
+}
+
+ul.controls {
+    margin-top: 20px;
+}
+
+/* right */
+span.badge-pill + span.badge-pill {
+    border-top-left-radius: 2rem !important;
+    border-bottom-left-radius: 2rem !important;
+    margin-left: 2px !important;
+}
+
+/* left */
+span.badge-pill:first-child:not(:only-child) {
+    /* Set right border-radius of the first span */
+    border-top-right-radius: 2rem !important;
+    border-bottom-right-radius: 2rem !important;
+    margin-left: 2px !important;
+}
