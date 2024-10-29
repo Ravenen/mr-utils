@@ -40,11 +40,11 @@
     background-color: var(--gl-background-color-default) !important;
 }
 
-li .issuable-info-container {
+.mr-card > .issuable-info-container {
     display: block !important;
 }
 
-ul.controls {
+.mr-card > div > div > ul.controls {
     margin-top: 20px;
 }
 
@@ -63,6 +63,10 @@ span.badge-pill:has(+ span.badge-pill) {
     margin-left: 2px !important;
 }
 
-.dimmed>div {
+.dimmed > div {
     opacity: 0.1;
+}
+
+.greened {
+    background-color: rgba(0, 149, 0, 0.1) !important;
 }

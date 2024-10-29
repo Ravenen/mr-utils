@@ -1,7 +1,13 @@
-// content_script.js
+(async function () {
+  var browser = browser ? browser : chrome;
 
-(function () {
+  const res = await browser.storage.sync.get(["approvalsNeeded", "kanbanView"]);
+  const requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
+  const isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
+
   let currentUserId;
+
+  console.log("requiredApprovals, isKanbanView: ", requiredApprovals, isKanbanView);
 
   // Fetch current user ID via GitLab API
   function getCurrentUserId() {
@@ -60,15 +66,18 @@
 
   // Process each merge request
   function processMergeRequests() {
-    const kanbanBoard = createKanbanBoard();
-    if (!kanbanBoard) return;
+    let columns;
+    if (isKanbanView) {
+      const kanbanBoard = createKanbanBoard();
+      if (!kanbanBoard) return;
 
-    const columns = {
-      "To Review": kanbanBoard.querySelector('[data-column="To Review"] .kanban-column-body'),
-      Pending: kanbanBoard.querySelector('[data-column="Pending"] .kanban-column-body'),
-      Approved: kanbanBoard.querySelector('[data-column="Approved"] .kanban-column-body'),
-    };
-    console.log("Kanban columns initialized:", columns);
+      columns = {
+        "To Review": kanbanBoard.querySelector('[data-column="To Review"] .kanban-column-body'),
+        Pending: kanbanBoard.querySelector('[data-column="Pending"] .kanban-column-body'),
+        Approved: kanbanBoard.querySelector('[data-column="Approved"] .kanban-column-body'),
+      };
+      console.log("Kanban columns initialized:", columns);
+    }
 
     const mergeRequestElements = document.getElementsByClassName("merge-request");
     const mergeRequestElementsArr = [...mergeRequestElements];
@@ -111,11 +120,16 @@
         .sort((a, b) => a.index - b.index) // Sort by the original order
         .forEach(({ mrElement, mrData }) => {
           if (mrData) {
-            // Place each MR in its respective column
-            moveToColumn(mrElement, mrData.columnName, columns);
             addBadges(mrElement, mrData); // Add badges after appending
             if (mrData.isDraft) {
               mrElement.classList.add("dimmed");
+            }
+            if (isKanbanView) {
+              // Place each MR in its respective column
+              mrElement.classList.add("mr-card");
+              moveToColumn(mrElement, mrData.columnName, columns);
+            } else if (mrData.hasUserApproved && !mrData.isDraft) {
+              mrElement.classList.add("greened");
             }
           }
         });
@@ -188,7 +202,7 @@
       }
     });
 
-    const approvalsRequired = 3; // Desired number of approvals
+    const approvalsRequired = requiredApprovals; // Desired number of approvals
     const approvalsGiven = approvalsData.approved_by ? approvalsData.approved_by.length : 0;
     const hasUserApproved = approvalsData.approved_by
       ? approvalsData.approved_by.some((user) => user.user && user.user.id == currentUserId)
@@ -224,7 +238,6 @@
 
   // Add badges to the MR element using GitLab's native styles
   function addBadges(mrElement, mrData) {
-    mrElement.classList.add("mr-card");
     console.log("Adding badges to MR card:", mrElement);
 
     // Find the controls section

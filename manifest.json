@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "GitLab Merge Request Kanban Board",
-    "version": "1.0",
-    "description": "Transforms the GitLab merge requests list into a kanban board with helpful badges.",
+    "name": "Gitlab merge requests utils",
+    "version": "1.1",
+    "description": "Add different utils for gitlab merge requests",
     "icons": {
         "48": "icons/icon48.png",
         "96": "icons/icon96.png"
@@ -22,5 +22,16 @@
             ],
             "run_at": "document_end"
         }
-    ]
+    ],
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "permissions": [
+        "storage"
+    ],
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "mr-utils@vpavliyk"
+        }
+    }
 }
