@@ -1,4 +1,13 @@
-(async function () {
+var url = window.location.pathname;
+const mergeRequestRe = /merge_requests\/\d+/g;
+
+if (url.match(mergeRequestRe)) mergeRequestPage();
+else mergeRequestsList();
+
+/*
+ * mergeRequestsList
+ */
+async function mergeRequestsList() {
   var browser = browser ? browser : chrome;
 
   const res = await browser.storage.sync.get(["approvalsNeeded", "kanbanView"]);
@@ -316,4 +325,115 @@
       console.error("Could not obtain current user ID. Extension functionality may be limited.");
     }
   });
-})();
+}
+/*
+ * mergeRequestsList
+ */
+
+/*
+ * mergeRequestPage
+ */
+var approveBtn = null;
+var checksBar = null;
+var mergeBar = null;
+
+function createCheck(id, text) {
+  var block = document.createElement("div");
+  block.setAttribute("style", "display: block");
+  block.style.marginTop = "10px";
+  block.style.marginBottom = "10px";
+
+  var checkbox = document.createElement("input");
+  checkbox.style.marginRight = "10px";
+  checkbox.type = "checkbox";
+  checkbox.name = id;
+  checkbox.id = id;
+
+  var checkStatus = JSON.parse(localStorage.getItem(url + "/mr-utils"));
+  if (!checkStatus) {
+    checkStatus = {};
+  }
+  if (!checkStatus[id]) {
+    checkStatus[id] = false;
+  }
+  checkbox.checked = checkStatus[id];
+  localStorage.setItem(url + "/mr-utils", JSON.stringify(checkStatus));
+
+  checkbox.onclick = (cb) => {
+    let obj = JSON.parse(localStorage.getItem(url + "/mr-utils"));
+    obj[id] = cb.target.checked;
+    localStorage.setItem(url + "/mr-utils", JSON.stringify(obj));
+    updateApproveVisibility();
+  };
+
+  var checkboxLabel = document.createElement("label");
+  checkboxLabel.htmlFor = id;
+  checkboxLabel.appendChild(document.createTextNode(text));
+
+  block.appendChild(checkbox);
+  block.appendChild(checkboxLabel);
+
+  return block;
+}
+
+function isConditionsChecked() {
+  var checkStatus = JSON.parse(localStorage.getItem(url + "/mr-utils"));
+  return checkStatus && Object.keys(checkStatus).reduce((res, current) => res && checkStatus[current], true);
+}
+
+function updateApproveVisibility() {
+  if (isConditionsChecked()) {
+    if (approveBtn) {
+      approveBtn.style.setProperty("display", "flex", "important");
+      mergeBar.style.setProperty("display", "block", "important");
+    }
+  } else {
+    if (!approveBtn.textContent.includes("Revoke approval\n"))
+      approveBtn.style.setProperty("display", "none", "important");
+    mergeBar.style.setProperty("display", "none", "important");
+  }
+}
+
+function mergeRequestPage() {
+  var intervalId = window.setInterval(function () {
+    try {
+      var approveBar = document.getElementsByClassName("js-mr-approvals")[0].getElementsByTagName("button")[0]
+        .parentElement.parentElement;
+    } catch (error) {
+      console.log(error);
+    }
+
+    if (!approveBar || approveBar.textContent.includes("Checking approval status")) return;
+
+    approveBtn = approveBar.getElementsByTagName("button")[0];
+    mergeBar =
+      document.getElementsByClassName("mr-widget-body-ready-merge")[0].parentElement.parentElement.parentElement;
+
+    approveBtn.parentElement.style.height = "32px";
+
+    updateApproveVisibility();
+
+    checksBar = document.createElement("div");
+    checksBar.setAttribute("style", "display: block");
+    checksBar.setAttribute("style", "width: 100%");
+
+    var headingElement = document.createElement("p");
+    var headingText = document.createTextNode("Check following conditions to approve:");
+    headingElement.style.fontWeight = "600";
+    headingElement.appendChild(headingText);
+
+    checkDocs = createCheck("docs_check", "Is documentation updated?");
+    checkTarget = createCheck("branch_check", "Is merge target right?");
+
+    checksBar.appendChild(headingElement);
+    checksBar.appendChild(checkDocs);
+    checksBar.appendChild(checkTarget);
+
+    approveBar.parentElement.prepend(checksBar);
+
+    clearInterval(intervalId);
+  }, 100);
+}
+/*
+ * mergeRequestPage
+ */
