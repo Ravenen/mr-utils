@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Gitlab merge requests utils",
-    "version": "1.1",
+    "version": "1.0.0",
     "description": "Add different utils for gitlab merge requests",
     "icons": {
         "48": "icons/icon48.png",
@@ -26,12 +26,15 @@
     "action": {
         "default_popup": "popup.html"
     },
+    "browser_action": {
+        "default_popup": "popup.html"
+    },
     "permissions": [
         "storage"
     ],
     "browser_specific_settings": {
         "gecko": {
-            "id": "mr-utils@vpavliyk"
+            "id": "{d16c5235-1761-48f3-9fb3-85e3a592e362}"
         }
     }
 }
