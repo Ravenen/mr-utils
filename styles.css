@@ -62,3 +62,7 @@ span.badge-pill:first-child:not(:only-child) {
     border-bottom-right-radius: 2rem !important;
     margin-left: 2px !important;
 }
+
+.dimmed>div {
+    opacity: 0.1;
+}

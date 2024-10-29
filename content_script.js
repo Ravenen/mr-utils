@@ -114,6 +114,9 @@
             // Place each MR in its respective column
             moveToColumn(mrElement, mrData.columnName, columns);
             addBadges(mrElement, mrData); // Add badges after appending
+            if (mrData.isDraft) {
+              mrElement.classList.add("dimmed");
+            }
           }
         });
     });
@@ -131,6 +134,12 @@
     console.log(`Fetching data for MR IID ${mrIid} from URL:`, baseUrl);
 
     return Promise.all([
+      fetch(`${baseUrl}/`, { credentials: "same-origin" })
+        .then((res) => res.json())
+        .catch((err) => {
+          console.error(`Error fetching discussions for MR ${mrIid}:`, err);
+          return {};
+        }),
       fetch(`${baseUrl}/discussions?per_page=200`, { credentials: "same-origin" })
         .then((res) => res.json())
         .catch((err) => {
@@ -143,11 +152,11 @@
           console.error(`Error fetching approvals for MR ${mrIid}:`, err);
           return {};
         }),
-    ]).then(([discussionsData, approvalsData]) => {
+    ]).then(([mainData, discussionsData, approvalsData]) => {
       console.log(`Discussions data for MR IID ${mrIid}:`, discussionsData);
       console.log(`Approvals data for MR IID ${mrIid}:`, approvalsData);
 
-      const mrData = processMRData(discussionsData, approvalsData);
+      const mrData = processMRData(mainData, discussionsData, approvalsData);
       console.log(`Processed data for MR IID ${mrIid}:`, mrData);
 
       return mrData;
@@ -155,7 +164,8 @@
   }
 
   // Process MR discussions and approvals data
-  function processMRData(discussionsData, approvalsData) {
+  function processMRData(mainData, discussionsData, approvalsData) {
+    const isDraft = mainData.title.toLowerCase().includes("draft:");
     discussionsData = discussionsData.filter((discussion) => !discussion.individual_note);
     const totalThreads = discussionsData.length;
     let unresolvedThreads = 0;
@@ -208,6 +218,7 @@
       approvalsRequired,
       hasUserApproved,
       columnName,
+      isDraft,
     };
   }
 
