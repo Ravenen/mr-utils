@@ -71,35 +71,56 @@
     console.log("Kanban columns initialized:", columns);
 
     const mergeRequestElements = document.getElementsByClassName("merge-request");
-    console.log("Merge request elements found:", mergeRequestElements);
+    const mergeRequestElementsArr = [...mergeRequestElements];
+    console.log("Merge request elements found:", mergeRequestElementsArr);
 
-    for (let mrElement of mergeRequestElements) {
-      if (mrElement.tagName !== "LI") continue;
+    const fetchPromises = mergeRequestElementsArr.map((mrElement, index) => {
+      if (mrElement.tagName !== "LI") return Promise.resolve(null);
 
       const mrLink = mrElement.querySelector(".merge-request-title-text a");
-      if (mrLink) {
-        const mrUrl = mrLink.getAttribute("href");
-        console.log("Merge request URL:", mrUrl);
+      if (!mrLink) return Promise.resolve(null);
 
-        // Parse the MR URL to extract projectPath and mrIid
-        const url = new URL(mrUrl, window.location.origin);
-        const path = url.pathname;
-        const matches = path.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
-        if (matches) {
-          const projectPath = matches[1];
-          const mrIid = matches[2];
-          console.log("Project path:", projectPath);
-          console.log("MR IID:", mrIid);
-          getMergeRequestData(projectPath, mrIid, mrElement, columns);
-        } else {
-          console.error("Unable to parse MR URL:", mrUrl);
-        }
+      const mrUrl = mrLink.getAttribute("href");
+      console.log("Merge request URL:", mrUrl);
+
+      // Parse the MR URL to extract projectPath and mrIid
+      const url = new URL(mrUrl, window.location.origin);
+      const path = url.pathname;
+      const matches = path.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
+      if (!matches) {
+        console.error("Unable to parse MR URL:", mrUrl);
+        return Promise.resolve(null);
       }
-    }
+
+      const projectPath = matches[1];
+      const mrIid = matches[2];
+      console.log("Project path:", projectPath);
+      console.log("MR IID:", mrIid);
+
+      return getMergeRequestData(projectPath, mrIid, mrElement).then((mrData) => ({
+        index, // Preserve the original index
+        mrElement,
+        mrData,
+      }));
+    });
+
+    // Wait for all data to be fetched
+    Promise.all(fetchPromises).then((results) => {
+      results
+        .filter(Boolean) // Remove any null results
+        .sort((a, b) => a.index - b.index) // Sort by the original order
+        .forEach(({ mrElement, mrData }) => {
+          if (mrData) {
+            // Place each MR in its respective column
+            moveToColumn(mrElement, mrData.columnName, columns);
+            addBadges(mrElement, mrData); // Add badges after appending
+          }
+        });
+    });
   }
 
   // Fetch MR data and decide its kanban column
-  function getMergeRequestData(projectPath, mrIid, mrElement, columns) {
+  function getMergeRequestData(projectPath, mrIid, mrElement) {
     if (!projectPath) return;
     console.log("Project path:", projectPath);
 
@@ -109,7 +130,7 @@
 
     console.log(`Fetching data for MR IID ${mrIid} from URL:`, baseUrl);
 
-    Promise.all([
+    return Promise.all([
       fetch(`${baseUrl}/discussions?per_page=200`, { credentials: "same-origin" })
         .then((res) => res.json())
         .catch((err) => {
@@ -122,18 +143,15 @@
           console.error(`Error fetching approvals for MR ${mrIid}:`, err);
           return {};
         }),
-    ])
-      .then(([discussionsData, approvalsData]) => {
-        console.log(`Discussions data for MR IID ${mrIid}:`, discussionsData);
-        console.log(`Approvals data for MR IID ${mrIid}:`, approvalsData);
+    ]).then(([discussionsData, approvalsData]) => {
+      console.log(`Discussions data for MR IID ${mrIid}:`, discussionsData);
+      console.log(`Approvals data for MR IID ${mrIid}:`, approvalsData);
 
-        const mrData = processMRData(discussionsData, approvalsData);
-        console.log(`Processed data for MR IID ${mrIid}:`, mrData);
+      const mrData = processMRData(discussionsData, approvalsData);
+      console.log(`Processed data for MR IID ${mrIid}:`, mrData);
 
-        addBadges(mrElement, mrData);
-        moveToColumn(mrElement, mrData.columnName, columns);
-      })
-      .catch((error) => console.error("Error processing MR data:", error));
+      return mrData;
+    });
   }
 
   // Process MR discussions and approvals data
@@ -205,14 +223,6 @@
       return;
     }
 
-    // // Create a container for badges if it doesn't exist
-    // let badgesContainer = controlsContainer.querySelector(".kanban-badges");
-    // if (!badgesContainer) {
-    //   badgesContainer = document.createElement("div");
-    //   badgesContainer.classList.add("kanban-badges", "gl-display-flex", "gl-flex-wrap", "gl-mt-2");
-    //   controlsContainer.appendChild(badgesContainer);
-    // }
-
     // Threads badge
     if (mrData.totalThreads > 0) {
       let threadsBadgesContainer = controlsContainer.querySelector(".kanban-badges");
@@ -260,12 +270,9 @@
 
   // Construct a badge using GitLab's styles
   function constructBadge(text, badgeStyle) {
-    // const badgeLi = document.createElement("li");
-    // badgeLi.className = `gl-flex !gl-mr-0`;
     const badgeSpan = document.createElement("span");
     badgeSpan.className = `gl-badge badge badge-pill sm ${badgeStyle}`;
     badgeSpan.textContent = text;
-    // badgeLi.appendChild(badgeSpan);
     return badgeSpan;
   }
 
