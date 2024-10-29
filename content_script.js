@@ -188,7 +188,7 @@
       }
     });
 
-    const approvalsRequired = 2; // Desired number of approvals
+    const approvalsRequired = 3; // Desired number of approvals
     const approvalsGiven = approvalsData.approved_by ? approvalsData.approved_by.length : 0;
     const hasUserApproved = approvalsData.approved_by
       ? approvalsData.approved_by.some((user) => user.user && user.user.id == currentUserId)
