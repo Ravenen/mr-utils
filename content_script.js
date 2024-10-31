@@ -12,7 +12,10 @@ async function mergeRequestsList() {
 
   const res = await browser.storage.sync.get(["approvalsNeeded", "kanbanView"]);
   const requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
-  const isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
+  var isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
+
+  const parsedUrl = new URL(window.location.href);
+  if (parsedUrl.searchParams.has("state") && !parsedUrl.searchParams.has("state", "opened")) isKanbanView = false;
 
   let currentUserId;
 
