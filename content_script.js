@@ -159,6 +159,27 @@ async function mergeRequestsList() {
 
     console.log(`Fetching data for MR IID ${mrIid} from URL:`, baseUrl);
 
+    const fetchDiscussions = async (baseUrl, mrIid) => {
+      let discussions = [];
+      let nextPage = 1; 
+    
+      while (nextPage) {
+        const response = await fetch(`${baseUrl}/discussions?per_page=100&page=${nextPage}`, { credentials: "same-origin" });
+    
+        if (!response.ok) {
+          console.error(`Error fetching discussions for MR ${mrIid}: ${response.status}`);
+          return {};
+        }
+    
+        const data = await response.json();
+        discussions = discussions.concat(data);
+    
+        nextPage = response.headers.get("x-next-page"); 
+      }
+    
+      return discussions;
+    };
+
     return Promise.all([
       fetch(`${baseUrl}/`, { credentials: "same-origin" })
         .then((res) => res.json())
@@ -166,12 +187,7 @@ async function mergeRequestsList() {
           console.error(`Error fetching discussions for MR ${mrIid}:`, err);
           return {};
         }),
-      fetch(`${baseUrl}/discussions?per_page=200`, { credentials: "same-origin" })
-        .then((res) => res.json())
-        .catch((err) => {
-          console.error(`Error fetching discussions for MR ${mrIid}:`, err);
-          return [];
-        }),
+        fetchDiscussions(baseUrl, mrIid),
       fetch(`${baseUrl}/approvals`, { credentials: "same-origin" })
         .then((res) => res.json())
         .catch((err) => {
