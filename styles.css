@@ -70,3 +70,7 @@ span.badge-pill:has(+ span.badge-pill) {
 .greened {
     background-color: rgba(0, 149, 0, 0.1) !important;
 }
+
+.kanban-count {
+    color: var(--gl-text-color-subtle);
+}

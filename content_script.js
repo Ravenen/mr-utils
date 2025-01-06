@@ -76,6 +76,27 @@ async function mergeRequestsList() {
     return kanbanBoard;
   }
 
+  function addColumnCounts(columns) {
+    Object.keys(columns).forEach(columnName => {
+        const column = columns[columnName];
+        const header = column.parentElement.querySelector('.kanban-column-header');
+        const count = column.children.length;
+
+        // // Remove existing count if it exists
+        // const existingCount = header.querySelector('.kanban-count');
+        // if (existingCount) {
+        //     existingCount.remove();
+        // }
+
+        // Add the new count
+        const countElement = document.createElement('span');
+        countElement.classList.add('kanban-count');
+        countElement.textContent = ` (${count})`;
+
+        header.appendChild(countElement);
+    });
+}
+
   // Process each merge request
   function processMergeRequests() {
     let columns;
@@ -145,6 +166,10 @@ async function mergeRequestsList() {
             }
           }
         });
+
+      if (isKanbanView) {
+        addColumnCounts(columns);
+      }
     });
   }
 
