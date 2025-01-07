@@ -48,6 +48,10 @@
     margin-top: 20px;
 }
 
+.kanban-badges {
+    display: flex;
+}
+
 /* right */
 span.badge-pill + span.badge-pill {
     border-top-left-radius: 2rem !important;

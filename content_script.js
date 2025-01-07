@@ -305,34 +305,54 @@ async function mergeRequestsList() {
       let threadsBadgesContainer = controlsContainer.querySelector(".kanban-badges");
       if (!threadsBadgesContainer) {
         threadsBadgesContainer = document.createElement("div");
-        threadsBadgesContainer.classList.add("kanban-badges", "gl-display-flex", "gl-flex-wrap", "gl-mt-2");
+        threadsBadgesContainer.classList.add("kanban-badges");
         controlsContainer.appendChild(threadsBadgesContainer);
       }
 
       const threadsBadge = constructBadge(
         `${mrData.totalThreads - mrData.unresolvedThreads}/${mrData.totalThreads}`,
+        'Total threads',
         mrData.unresolvedThreads === 0 ? "badge-success" : "badge-danger"
       );
       threadsBadgesContainer.appendChild(threadsBadge);
+      const commentsIcon = constructIcon('/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#comments');
+      threadsBadge.prepend(commentsIcon);
 
       // User threads badge
       if (mrData.totalUserThreads > 0) {
         const userThreadsBadge = constructBadge(
           `${mrData.totalUserThreads - mrData.unresolvedUserThreads}/${mrData.totalUserThreads}`,
+          'Your threads',
           mrData.unresolvedUserThreads === 0 ? "badge-success" : "badge-danger"
         );
         threadsBadgesContainer.appendChild(userThreadsBadge);
+
+        // if(mrData.unresolvedUserThreads === 0)
+        // {
+        //   const checkmarkIcon = constructIcon('/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#review-checkmark');
+        //   userThreadsBadge.prepend(checkmarkIcon);
+        // }
+        // else
+        // {
+        //   const warningIcon = constructIcon('/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#review-warning');
+        //   userThreadsBadge.prepend(warningIcon);
+        // }
+
+        const userCommentsIcon = constructIcon('/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#comment-dots');
+        userThreadsBadge.prepend(userCommentsIcon);
       }
 
       const commentsBadge = controlsContainer.querySelector('[data-testid="issuable-comments"]');
       if (commentsBadge) {
         commentsBadge.insertAdjacentElement("afterend", threadsBadgesContainer);
+        commentsBadge.remove();
       }
     }
 
     // Approvals badge
     const approvalsBadge = constructBadge(
       `${mrData.approvalsGiven}/${mrData.approvalsRequired}`,
+      'Approvals number',
       mrData.approvalsGiven >= mrData.approvalsRequired ? "badge-success" : "badge-danger"
     );
 
@@ -346,12 +366,27 @@ async function mergeRequestsList() {
   }
 
   // Construct a badge using GitLab's styles
-  function constructBadge(text, badgeStyle) {
+  function constructBadge(text, title, badgeStyle) {
     const badgeSpan = document.createElement("span");
-    badgeSpan.className = `gl-badge badge badge-pill sm ${badgeStyle}`;
+    badgeSpan.className = `gl-badge badge badge-pill sm has-tooltip ${badgeStyle}`;
     badgeSpan.textContent = text;
+    badgeSpan.title = title;
     return badgeSpan;
   }
+
+  function constructIcon(href) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('s14', 'gl-align-middle');
+    svg.setAttribute('data-testid', 'comments-icon');
+  
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', href);
+  
+    svg.appendChild(use);
+  
+    return svg;
+  }
+
 
   // Move MR element to the appropriate kanban column
   function moveToColumn(mrElement, columnName, columns) {
