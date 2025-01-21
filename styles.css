@@ -32,6 +32,7 @@
 }
 
 .mr-card {
+    display: block !important;
     margin-bottom: 10px !important;
     border-style: solid !important ;
     border-radius: .5rem !important;
@@ -50,6 +51,15 @@
 
 .kanban-badges {
     display: flex;
+}
+
+.kanban-banners {
+    /* display: flex; */
+    margin: 5px 0px;
+}
+
+.kanban-banners > .badge {
+    margin-right: 5px;
 }
 
 /* right */

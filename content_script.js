@@ -1,39 +1,34 @@
-var url = window.location.pathname;
+var g_requiredApprovals;
+var g_isKanbanView;
+var g_currentUserId;
+
+async function initData() {
+  var browser = browser ? browser : chrome;
+
+  const res = await browser.storage.sync.get(["approvalsNeeded", "kanbanView"]);
+  g_requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
+  g_isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
+
+  const parsedUrl = new URL(window.location.href);
+  if (parsedUrl.searchParams.has("state") && !parsedUrl.searchParams.has("state", "opened")) g_isKanbanView = false;
+
+  console.log("requiredApprovals, isKanbanView: ", g_requiredApprovals, g_isKanbanView);
+
+  g_currentUserId = await getCurrentUserId();
+};
+
+
+var g_url = window.location.pathname;
 const mergeRequestRe = /merge_requests\/\d+/g;
 
-if (url.match(mergeRequestRe)) mergeRequestPage();
+if (g_url.match(mergeRequestRe)) mergeRequestPage();
 else mergeRequestsList();
 
 /*
  * mergeRequestsList
  */
 async function mergeRequestsList() {
-  var browser = browser ? browser : chrome;
-
-  const res = await browser.storage.sync.get(["approvalsNeeded", "kanbanView"]);
-  const requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
-  var isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
-
-  const parsedUrl = new URL(window.location.href);
-  if (parsedUrl.searchParams.has("state") && !parsedUrl.searchParams.has("state", "opened")) isKanbanView = false;
-
-  let currentUserId;
-
-  console.log("requiredApprovals, isKanbanView: ", requiredApprovals, isKanbanView);
-
-  // Fetch current user ID via GitLab API
-  function getCurrentUserId() {
-    return fetch(`${window.location.origin}/api/v4/user`, { credentials: "same-origin" })
-      .then((response) => response.json())
-      .then((userData) => {
-        console.log("Current User Data:", userData);
-        return userData.id;
-      })
-      .catch((error) => {
-        console.error("Error fetching current user data:", error);
-        return null;
-      });
-  }
+  await initData();
 
   // Create the kanban board structure
   function createKanbanBoard() {
@@ -62,7 +57,7 @@ async function mergeRequestsList() {
     });
 
     // Insert the kanban board before the existing MR list and hide the original list
-    const mrListContainer = document.querySelector(".mr-list");
+    const mrListContainer = document.querySelector(".content-list, .issues-list");
     console.log("Merge requests list container element:", mrListContainer);
 
     if (mrListContainer) {
@@ -95,12 +90,27 @@ async function mergeRequestsList() {
 
         header.appendChild(countElement);
     });
-}
+  }
 
   // Process each merge request
-  function processMergeRequests() {
+  async function processMergeRequests() {
+
+    let mergeRequestElementsArr = await new Promise(async (resolve) => {
+        let mr = document.querySelectorAll('.merge-request');  
+        while (
+          (mr = document.querySelectorAll('.merge-request')).length === 0
+          && document.querySelector(".content-list")
+        ) {
+          await new Promise(r => setTimeout(r, 50))
+        }
+
+        resolve([...mr]);
+      })
+
+    console.log("Merge request elements found:", mergeRequestElementsArr);
+
     let columns;
-    if (isKanbanView) {
+    if (g_isKanbanView) {
       const kanbanBoard = createKanbanBoard();
       if (!kanbanBoard) return;
 
@@ -112,14 +122,10 @@ async function mergeRequestsList() {
       console.log("Kanban columns initialized:", columns);
     }
 
-    const mergeRequestElements = document.getElementsByClassName("merge-request");
-    const mergeRequestElementsArr = [...mergeRequestElements];
-    console.log("Merge request elements found:", mergeRequestElementsArr);
-
     const fetchPromises = mergeRequestElementsArr.map((mrElement, index) => {
       if (mrElement.tagName !== "LI") return Promise.resolve(null);
 
-      const mrLink = mrElement.querySelector(".merge-request-title-text a");
+      const mrLink = mrElement.querySelector("[data-testid='issuable-title-link']");
       if (!mrLink) return Promise.resolve(null);
 
       const mrUrl = mrLink.getAttribute("href");
@@ -139,7 +145,7 @@ async function mergeRequestsList() {
       console.log("Project path:", projectPath);
       console.log("MR IID:", mrIid);
 
-      return getMergeRequestData(projectPath, mrIid, mrElement).then((mrData) => ({
+      return getMergeRequestData(projectPath, mrIid, g_currentUserId).then((mrData) => ({
         index, // Preserve the original index
         mrElement,
         mrData,
@@ -157,136 +163,36 @@ async function mergeRequestsList() {
             if (mrData.isDraft) {
               mrElement.classList.add("dimmed");
             }
-            if (isKanbanView) {
+            if (g_isKanbanView) {
               // Place each MR in its respective column
               mrElement.classList.add("mr-card");
-              moveToColumn(mrElement, mrData.columnName, columns);
+              mrElement.classList.remove("!gl-flex");
+              // Determine the kanban column
+              let columnName;
+              if (mrData.hasUserApproved) {
+                columnName = "Approved";
+              } else if (mrData.unresolvedUserThreads > 0) {
+                columnName = "Pending";
+              } else {
+                columnName = "To Review";
+              }
+              console.log(`Column assigned for MR: ${columnName}`);
+              moveToColumn(mrElement, columnName, columns);
             } else if (mrData.hasUserApproved && !mrData.isDraft) {
               mrElement.classList.add("greened");
+            }
+
+            if(mrData.hasUserApproved)
+            {
+              addBanners(mrElement, mrData);
             }
           }
         });
 
-      if (isKanbanView) {
+      if (g_isKanbanView) {
         addColumnCounts(columns);
       }
     });
-  }
-
-  // Fetch MR data and decide its kanban column
-  function getMergeRequestData(projectPath, mrIid, mrElement) {
-    if (!projectPath) return;
-    console.log("Project path:", projectPath);
-
-    const encodedProjectPath = encodeURIComponent(projectPath);
-
-    const baseUrl = `${window.location.origin}/api/v4/projects/${encodedProjectPath}/merge_requests/${mrIid}`;
-
-    console.log(`Fetching data for MR IID ${mrIid} from URL:`, baseUrl);
-
-    const fetchDiscussions = async (baseUrl, mrIid) => {
-      let discussions = [];
-      let nextPage = 1; 
-    
-      while (nextPage) {
-        const response = await fetch(`${baseUrl}/discussions?per_page=100&page=${nextPage}`, { credentials: "same-origin" });
-    
-        if (!response.ok) {
-          console.error(`Error fetching discussions for MR ${mrIid}: ${response.status}`);
-          return {};
-        }
-    
-        const data = await response.json();
-        discussions = discussions.concat(data);
-    
-        nextPage = response.headers.get("x-next-page"); 
-      }
-    
-      return discussions;
-    };
-
-    return Promise.all([
-      fetch(`${baseUrl}/`, { credentials: "same-origin" })
-        .then((res) => res.json())
-        .catch((err) => {
-          console.error(`Error fetching discussions for MR ${mrIid}:`, err);
-          return {};
-        }),
-        fetchDiscussions(baseUrl, mrIid),
-      fetch(`${baseUrl}/approvals`, { credentials: "same-origin" })
-        .then((res) => res.json())
-        .catch((err) => {
-          console.error(`Error fetching approvals for MR ${mrIid}:`, err);
-          return {};
-        }),
-    ]).then(([mainData, discussionsData, approvalsData]) => {
-      console.log(`Discussions data for MR IID ${mrIid}:`, discussionsData);
-      console.log(`Approvals data for MR IID ${mrIid}:`, approvalsData);
-
-      const mrData = processMRData(mainData, discussionsData, approvalsData);
-      console.log(`Processed data for MR IID ${mrIid}:`, mrData);
-
-      return mrData;
-    });
-  }
-
-  // Process MR discussions and approvals data
-  function processMRData(mainData, discussionsData, approvalsData) {
-    const isDraft = mainData.title.toLowerCase().includes("draft:");
-    discussionsData = discussionsData.filter((discussion) => !discussion.individual_note);
-    const totalThreads = discussionsData.length;
-    let unresolvedThreads = 0;
-    let totalUserThreads = 0;
-    let unresolvedUserThreads = 0;
-
-    discussionsData.forEach((discussion) => {
-      const notes = discussion.notes;
-      if (!notes || notes.length === 0) return;
-
-      const rootNote = notes[0];
-
-      const isUserNote = rootNote.author && rootNote.author.id == currentUserId;
-      if (isUserNote) totalUserThreads++;
-
-      const isResolved = rootNote.resolved;
-      if (!isResolved) {
-        unresolvedThreads++;
-        if (isUserNote) unresolvedUserThreads++;
-      }
-    });
-
-    const approvalsRequired = requiredApprovals; // Desired number of approvals
-    const approvalsGiven = approvalsData.approved_by ? approvalsData.approved_by.length : 0;
-    const hasUserApproved = approvalsData.approved_by
-      ? approvalsData.approved_by.some((user) => user.user && user.user.id == currentUserId)
-      : false;
-
-    console.log(`MR data processed - Total threads: ${totalThreads}, Unresolved threads: ${unresolvedThreads}`);
-    console.log(`User threads - Total: ${totalUserThreads}, Unresolved: ${unresolvedUserThreads}`);
-    console.log(`Approvals given: ${approvalsGiven}, Has user approved: ${hasUserApproved}`);
-
-    // Determine the kanban column
-    let columnName;
-    if (hasUserApproved) {
-      columnName = "Approved";
-    } else if (unresolvedUserThreads > 0) {
-      columnName = "Pending";
-    } else {
-      columnName = "To Review";
-    }
-    console.log(`Column assigned for MR: ${columnName}`);
-
-    return {
-      totalThreads,
-      unresolvedThreads,
-      totalUserThreads,
-      unresolvedUserThreads,
-      approvalsGiven,
-      approvalsRequired,
-      hasUserApproved,
-      columnName,
-      isDraft,
-    };
   }
 
   // Add badges to the MR element using GitLab's native styles
@@ -342,10 +248,12 @@ async function mergeRequestsList() {
         userThreadsBadge.prepend(userCommentsIcon);
       }
 
-      const commentsBadge = controlsContainer.querySelector('[data-testid="issuable-comments"]');
-      if (commentsBadge) {
-        commentsBadge.insertAdjacentElement("afterend", threadsBadgesContainer);
-        commentsBadge.remove();
+      const nativeCommentsBadge = controlsContainer.querySelector('[data-testid="comments-icon"]')?.parentNode?.parentNode;
+      console.log("Issuable comments: ", nativeCommentsBadge);
+      
+      if (nativeCommentsBadge) {
+        nativeCommentsBadge.insertAdjacentElement("afterend", threadsBadgesContainer);
+        nativeCommentsBadge.remove();
       }
     }
 
@@ -358,6 +266,7 @@ async function mergeRequestsList() {
 
     const nativeApprovalBadge = controlsContainer.querySelector('[data-testid="mr-appovals"]');
     if (nativeApprovalBadge && nativeApprovalBadge.parentNode) {
+      nativeApprovalBadge.parentNode.classList.add("gl-flex");
       nativeApprovalBadge.insertAdjacentElement("afterend", approvalsBadge);
     } else if (mrData.approvalsGiven > 0) {
       // badgesContainer.appendChild(approvalsBadge);
@@ -365,14 +274,55 @@ async function mergeRequestsList() {
     console.log("Badges added to MR card.");
   }
 
+  function addBanners(mrElement, mrData)
+  {
+    console.log("Adding banners to MR card:", mrElement);
+
+    const infoContainer = mrElement.querySelector(".issuable-main-info");
+    if (!infoContainer) {
+      console.error("Cannot find controls container in MR element.");
+      return;
+    }
+
+    let bannersContainer = infoContainer.querySelector(".kanban-banners");
+    if (!bannersContainer) {
+      bannersContainer = document.createElement("div");
+      bannersContainer.classList.add("kanban-banners");
+      infoContainer.insertBefore(bannersContainer, infoContainer.firstChild);
+    }
+
+    if(mrData.savedCommitsNumber && mrData.savedCommitsNumber != mrData.commitsNumber)
+    {
+      const newCommitsBanner = constructBanner(`NEW COMMITS`, "New commits since last acknowledge", "badge-tier");
+      bannersContainer.appendChild(newCommitsBanner);
+    }
+
+    if(mrData.savedCommentsNumber && mrData.savedCommentsNumber != mrData.commentsNumber)
+      {
+        const newCommentsBanner = constructBanner(`NEW COMMENTS`, "New comments since last acknowledge", "badge-warning");
+        bannersContainer.appendChild(newCommentsBanner);
+      }
+    
+    console.log("Banners added to MR card.");
+  }
+
   // Construct a badge using GitLab's styles
   function constructBadge(text, title, badgeStyle) {
     const badgeSpan = document.createElement("span");
-    badgeSpan.className = `gl-badge badge badge-pill sm has-tooltip ${badgeStyle}`;
+    badgeSpan.className = `gl-mt-1 gl-badge badge badge-pill has-tooltip ${badgeStyle}`;
     badgeSpan.textContent = text;
     badgeSpan.title = title;
     return badgeSpan;
   }
+
+    // Construct a banner using GitLab's styles
+    function constructBanner(text, title, badgeStyle) {
+      const badgeSpan = document.createElement("span");
+      badgeSpan.className = `gl-badge badge has-tooltip ${badgeStyle} font-weight-bold`;
+      badgeSpan.textContent = text;
+      badgeSpan.title = title;
+      return badgeSpan;
+    }
 
   function constructIcon(href) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -396,15 +346,154 @@ async function mergeRequestsList() {
 
   // Initialize the script
   console.log("Initializing processMergeRequests...");
-  getCurrentUserId().then((userId) => {
-    if (userId) {
-      currentUserId = userId;
-      processMergeRequests();
-    } else {
-      console.error("Could not obtain current user ID. Extension functionality may be limited.");
+  if(!g_currentUserId) console.error("Could not obtain current user ID. Extension functionality may be limited.");
+  processMergeRequests();
+}
+
+// Fetch current user ID via GitLab API
+function getCurrentUserId() {
+  return fetch(`${window.location.origin}/api/v4/user`, { credentials: "same-origin" })
+    .then((response) => response.json())
+    .then((userData) => {
+      console.log("Current User Data:", userData);
+      return userData.id;
+    })
+    .catch((error) => {
+      console.error("Error fetching current user data:", error);
+      return null;
+    });
+}
+
+// Fetch MR data
+function getMergeRequestData(projectPath, mrIid) {
+  if (!projectPath) return;
+  console.log("Project path:", projectPath);
+
+  const encodedProjectPath = encodeURIComponent(projectPath);
+
+  const baseUrl = `${window.location.origin}/api/v4/projects/${encodedProjectPath}/merge_requests/${mrIid}`;
+
+  console.log(`Fetching data for MR IID ${mrIid} from URL:`, baseUrl);
+
+  const fetchDiscussions = async (baseUrl, mrIid) => {
+    let discussions = [];
+    let nextPage = 1; 
+  
+    while (nextPage) {
+      const response = await fetch(`${baseUrl}/discussions?per_page=100&page=${nextPage}`, { credentials: "same-origin" });
+  
+      if (!response.ok) {
+        console.error(`Error fetching discussions for MR ${mrIid}: ${response.status}`);
+        return {};
+      }
+  
+      const data = await response.json();
+      discussions = discussions.concat(data);
+  
+      nextPage = response.headers.get("x-next-page"); 
     }
+  
+    return discussions;
+  };
+
+  return Promise.all([
+    fetch(`${baseUrl}/`, { credentials: "same-origin" })
+      .then((res) => res.json())
+      .catch((err) => {
+        console.error(`Error fetching discussions for MR ${mrIid}:`, err);
+        return {};
+      }),
+    fetchDiscussions(baseUrl, mrIid),
+    fetch(`${baseUrl}/approvals`, { credentials: "same-origin" })
+      .then((res) => res.json())
+      .catch((err) => {
+        console.error(`Error fetching approvals for MR ${mrIid}:`, err);
+        return {};
+      }),
+    fetch(`${baseUrl}/commits`, { credentials: "same-origin" })
+      .then((res) => res.json())
+      .catch((err) => {
+        console.error(`Error fetching approvals for MR ${mrIid}:`, err);
+        return {};
+      }),
+  ]).then(([mainData, discussionsData, approvalsData, commitsData]) => {
+    console.log(`Main data for MR IID ${mrIid}:`, mainData);
+    console.log(`Discussions data for MR IID ${mrIid}:`, discussionsData);
+    console.log(`Approvals data for MR IID ${mrIid}:`, approvalsData);
+    console.log(`Commits data for MR IID ${mrIid}:`, commitsData);
+
+    const mrData = processMRData(mainData, discussionsData, approvalsData, commitsData);
+    console.log(`Processed data for MR IID ${mrIid}:`, mrData);
+
+    return mrData;
   });
 }
+
+// Process MR discussions and approvals data
+function processMRData(mainData, discussionsData, approvalsData, commitsData) {
+  const isDraft = mainData.title.toLowerCase().includes("draft:");
+  discussionsData = discussionsData.filter((discussion) => !discussion.individual_note);
+  const totalThreads = discussionsData.length;
+  let unresolvedThreads = 0;
+  let totalUserThreads = 0;
+  let unresolvedUserThreads = 0;
+
+  discussionsData.forEach((discussion) => {
+    const notes = discussion.notes;
+    if (!notes || notes.length === 0) return;
+
+    const rootNote = notes[0];
+
+    const isUserNote = rootNote.author && rootNote.author.id == g_currentUserId;
+    if (isUserNote) totalUserThreads++;
+
+    const isResolved = rootNote.resolved;
+    if (!isResolved) {
+      unresolvedThreads++;
+      if (isUserNote) unresolvedUserThreads++;
+    }
+  });
+
+  const approvalsRequired = g_requiredApprovals; // Desired number of approvals
+  const approvalsGiven = approvalsData.approved_by ? approvalsData.approved_by.length : 0;
+  const hasUserApproved = approvalsData.approved_by
+    ? approvalsData.approved_by.some((user) => user.user && user.user.id == g_currentUserId)
+    : false;
+
+  console.log(`MR data processed - Total threads: ${totalThreads}, Unresolved threads: ${unresolvedThreads}`);
+  console.log(`User threads - Total: ${totalUserThreads}, Unresolved: ${unresolvedUserThreads}`);
+  console.log(`Approvals given: ${approvalsGiven}, Has user approved: ${hasUserApproved}`);
+
+  const commentsNumber = mainData.user_notes_count;
+  const commitsNumber = commitsData.length;
+  
+  const mrUrl = new URL(mainData.web_url);
+  const pathname = mrUrl.pathname; 
+
+  var savedData = JSON.parse(localStorage.getItem(pathname + "/mr-utils"));
+  if (!savedData) {
+    savedData = {};
+  }
+
+  const savedCommentsNumber = savedData["comments_number"];
+  const savedCommitsNumber = savedData["commits_number"];
+
+  return {
+    totalThreads,
+    unresolvedThreads,
+    totalUserThreads,
+    unresolvedUserThreads,
+    approvalsGiven,
+    approvalsRequired,
+    hasUserApproved,
+    isDraft,
+    commentsNumber,
+    savedCommentsNumber,
+    commitsNumber,
+    savedCommitsNumber,
+  };
+}
+
 /*
  * mergeRequestsList
  */
@@ -428,7 +517,7 @@ function createCheck(id, text) {
   checkbox.name = id;
   checkbox.id = id;
 
-  var checkStatus = JSON.parse(localStorage.getItem(url + "/mr-utils"));
+  var checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
   if (!checkStatus) {
     checkStatus = {};
   }
@@ -436,12 +525,12 @@ function createCheck(id, text) {
     checkStatus[id] = false;
   }
   checkbox.checked = checkStatus[id];
-  localStorage.setItem(url + "/mr-utils", JSON.stringify(checkStatus));
+  localStorage.setItem(g_url + "/mr-utils", JSON.stringify(checkStatus));
 
   checkbox.onclick = (cb) => {
-    let obj = JSON.parse(localStorage.getItem(url + "/mr-utils"));
+    let obj = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
     obj[id] = cb.target.checked;
-    localStorage.setItem(url + "/mr-utils", JSON.stringify(obj));
+    localStorage.setItem(g_url + "/mr-utils", JSON.stringify(obj));
     updateApproveVisibility();
   };
 
@@ -456,7 +545,7 @@ function createCheck(id, text) {
 }
 
 function isConditionsChecked() {
-  var checkStatus = JSON.parse(localStorage.getItem(url + "/mr-utils"));
+  var checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
   return checkStatus && Object.keys(checkStatus).reduce((res, current) => res && checkStatus[current], true);
 }
 
@@ -473,7 +562,24 @@ function updateApproveVisibility() {
   }
 }
 
-function mergeRequestPage() {
+async function updateSavedData() {
+  const body = document.querySelector('body');
+  const projectPath = body.attributes['data-project-full-path'].value;
+  const mrIid = body.attributes['data-page-type-id'].value;
+  const mrData = await getMergeRequestData(projectPath, mrIid);
+
+  var savedData = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
+  if (!savedData) {
+    savedData = {};
+  }
+  savedData["comments_number"] = mrData.commentsNumber;
+  savedData["commits_number"] = mrData.commitsNumber;
+  localStorage.setItem(g_url + "/mr-utils", JSON.stringify(savedData));
+}
+
+async function mergeRequestPage() {
+  await initData();
+
   var intervalId = window.setInterval(function () {
     try {
       var approveBar = document.getElementsByClassName("js-mr-approvals")[0].getElementsByTagName("button")[0]
@@ -489,6 +595,7 @@ function mergeRequestPage() {
       document.getElementsByClassName("mr-widget-body-ready-merge")[0].parentElement.parentElement.parentElement;
 
     approveBtn.parentElement.style.height = "32px";
+    approveBtn.addEventListener('click', () => updateSavedData());
 
     updateApproveVisibility();
 
