@@ -55,7 +55,6 @@ new MutationObserver(() => {
 
 // Handle URL changes
 async function onUrlChange() {
-  console.log("onUrlChange");
   cleanupBoard();
   const parsedUrl = new URL(window.location.href);
   const isOpened = !parsedUrl.searchParams.has("state") || parsedUrl.searchParams.get("state") === "opened";
