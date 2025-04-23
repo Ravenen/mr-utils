@@ -55,17 +55,8 @@ new MutationObserver(() => {
 
 // Handle URL changes
 async function onUrlChange() {
-  cleanupBoard();
-  const parsedUrl = new URL(window.location.href);
-  const isOpened = !parsedUrl.searchParams.has("state") || parsedUrl.searchParams.get("state") === "opened";
-  g_isKanbanView = g_isKanbanView && isOpened;
-  
-  const g_url = window.location.pathname;
-  const mergeRequestRe = /merge_requests\/\d+/g;
-
-  if (g_url.match(mergeRequestRe)) {
-    mergeRequestPage();
-  } else {
+  if (!g_url.match(mergeRequestRe)) {
+    cleanupBoard();
     mergeRequestsList();
   }
 }
