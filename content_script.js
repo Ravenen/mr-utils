@@ -162,44 +162,36 @@ async function mergeRequestsList() {
       };
     }
 
-    // Batch fetch MR data for all MRs
-    const mrPromises = mergeRequestElementsArr
-      .map((mrElement, index) => {
-        if (mrElement.tagName !== "LI") return null;
-        const mrLink = mrElement.querySelector("[data-testid='issuable-title-link']");
-        if (!mrLink) return null;
+    // Fetch MR data for each MR element
+    const fetchPromises = mergeRequestElementsArr.map((mrElement, index) => {
+      if (mrElement.tagName !== "LI") return Promise.resolve(null);
+      const mrLink = mrElement.querySelector("[data-testid='issuable-title-link']");
+      if (!mrLink) return Promise.resolve(null);
 
-        const mrUrl = mrLink.getAttribute("href");
-        const url = new URL(mrUrl, window.location.origin);
-        const path = url.pathname;
-        const matches = path.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
-        if (!matches) return null;
+      const mrUrl = mrLink.getAttribute("href");
+      const url = new URL(mrUrl, window.location.origin);
+      const path = url.pathname;
+      const matches = path.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
+      if (!matches) return Promise.resolve(null);
 
-        const projectPath = matches[1];
-        const mrIid = matches[2];
-        return { index, mrElement, projectPath, mrIid };
-      })
-      .filter(Boolean);
+      const projectPath = matches[1];
+      const mrIid = matches[2];
+      return getMergeRequestData(projectPath, mrIid).then(mrData => ({
+        index, mrElement, mrData
+      }));
+    });
 
-    // Batch process all MRs in parallel
-    const batchSize = 5; // Process 5 MRs at a time to avoid overwhelming the API
-    for (let i = 0; i < mrPromises.length; i += batchSize) {
-      const batch = mrPromises.slice(i, i + batchSize);
-      const batchResults = await Promise.all(
-        batch.map(({ index, mrElement, projectPath, mrIid }) =>
-          getMergeRequestData(projectPath, mrIid).then(mrData => ({
-            index, mrElement, mrData
-          }))
-        )
-      );
-
-      batchResults
-        .filter(result => result && result.mrData)
+    Promise.all(fetchPromises).then(results => {
+      results
+        .filter(Boolean)
         .sort((a, b) => a.index - b.index)
         .forEach(({ mrElement, mrData }) => {
+          if (!mrData) return;
           addBadges(mrElement, mrData);
           if (mrData.isDraft) mrElement.classList.add("dimmed");
           if (g_isKanbanView) {
+            mrElement.classList.add("mr-card");
+            mrElement.classList.remove("!gl-flex");
             let columnName;
             if (mrData.hasUserApproved) columnName = "Approved";
             else if (mrData.unresolvedUserThreads > 0) columnName = "Pending";
@@ -210,9 +202,8 @@ async function mergeRequestsList() {
           }
           if (mrData.hasUserApproved) addBanners(mrElement, mrData);
         });
-    }
-
-    if (g_isKanbanView) addColumnCounts(columns);
+      if (g_isKanbanView) addColumnCounts(columns);
+    });
   }
 
   // Add badges to MR card
@@ -360,34 +351,25 @@ function getMergeRequestData(projectPath, mrIid) {
   const encodedProjectPath = encodeURIComponent(projectPath);
   const baseUrl = `${window.location.origin}/api/v4/projects/${encodedProjectPath}/merge_requests/${mrIid}`;
 
-  // Fetch all discussions in parallel with pagination
+  // Fetch all discussions (paginated)
   const fetchDiscussions = async () => {
-    // First fetch to get total pages
-    const firstResponse = await fetch(`${baseUrl}/discussions?per_page=100&page=1`, { credentials: "same-origin" });
-    if (!firstResponse.ok) return [];
-    
-    const totalPages = parseInt(firstResponse.headers.get("x-total-pages") || "1", 10);
-    const firstPageData = await firstResponse.json();
-    
-    if (totalPages === 1) return firstPageData;
-
-    // Fetch all other pages in parallel
-    const otherPagesPromises = Array.from({ length: totalPages - 1 }, (_, i) =>
-      fetch(`${baseUrl}/discussions?per_page=100&page=${i + 2}`, { credentials: "same-origin" })
-        .then(res => res.json())
-        .catch(() => [])
-    );
-
-    const otherPagesData = await Promise.all(otherPagesPromises);
-    return firstPageData.concat(...otherPagesData);
+    let discussions = [];
+    let nextPage = 1;
+    while (nextPage) {
+      const response = await fetch(`${baseUrl}/discussions?per_page=100&page=${nextPage}`, { credentials: "same-origin" });
+      if (!response.ok) return [];
+      const data = await response.json();
+      discussions = discussions.concat(data);
+      nextPage = response.headers.get("x-next-page");
+    }
+    return discussions;
   };
 
-  // Fetch all data in parallel
   return Promise.all([
     fetch(`${baseUrl}/`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ({})),
     fetchDiscussions(),
     fetch(`${baseUrl}/approvals`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ({})),
-    fetch(`${baseUrl}/commits`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ([]))
+    fetch(`${baseUrl}/commits`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ([])),
   ]).then(([mainData, discussionsData, approvalsData, commitsData]) =>
     processMRData(mainData, discussionsData, approvalsData, commitsData)
   );
