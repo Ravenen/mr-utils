@@ -1,23 +1,23 @@
-/* styles.css */
+/* Kanban Board Styles for GitLab MR Utils */
 
-/* Remove hardcoded colors and rely on GitLab's styles */
+/* Board layout */
 .kanban-board {
     display: flex;
-    /* flex-wrap: wrap; */
     gap: 16px;
     margin-top: 16px;
 }
 
+/* Kanban columns */
 .kanban-column {
     flex: 1;
-    /* min-width: 300px; */
     border-style: solid;
     border-radius: .25rem;
     border-width: 1px;
     border-color: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
-    background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd))
+    background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
 }
 
+/* Column header */
 .kanban-column-header {
     padding: 10px;
     background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
@@ -27,64 +27,72 @@
     border-radius: .25rem .25rem 0 0;
 }
 
+/* Column body */
 .kanban-column-body {
     padding: 10px !important;
 }
 
+/* MR card styling */
 .mr-card {
     display: block !important;
     margin-bottom: 10px !important;
-    border-style: solid !important ;
+    border-style: solid !important;
     border-radius: .5rem !important;
     border-width: 1px !important;
     border-color: var(--gl-border-color-default) !important;
     background-color: var(--gl-background-color-default) !important;
 }
 
+/* Info container in MR card */
 .mr-card > .issuable-info-container {
     display: block !important;
 }
 
+/* Controls margin */
 .mr-card > div > div > ul.controls {
     margin-top: 20px;
 }
 
+/* Badges container */
 .kanban-badges {
     display: flex;
 }
 
+/* Banners container */
 .kanban-banners {
-    /* display: flex; */
     margin: 5px 0px;
 }
 
+/* Banner badge spacing */
 .kanban-banners > .badge {
     margin-right: 5px;
 }
 
-/* right */
+/* Badge pill right spacing */
 span.badge-pill + span.badge-pill {
     border-top-left-radius: 2rem !important;
     border-bottom-left-radius: 2rem !important;
     margin-left: 2px !important;
 }
 
-/* left */
+/* Badge pill left spacing */
 span.badge-pill:has(+ span.badge-pill) {
-    /* Set right border-radius of the first span */
     border-top-right-radius: 2rem !important;
     border-bottom-right-radius: 2rem !important;
     margin-left: 2px !important;
 }
 
+/* Dimmed (draft) MR */
 .dimmed > div {
     opacity: 0.1;
 }
 
+/* Approved MR highlight */
 .greened {
     background-color: rgba(0, 149, 0, 0.1) !important;
 }
 
+/* Column count */
 .kanban-count {
     color: var(--gl-text-color-subtle);
 }

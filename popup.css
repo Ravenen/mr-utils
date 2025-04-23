@@ -1,4 +1,5 @@
-/* popup.css */
+/* Popup Styles for MR Utils Extension */
+
 * {
     box-sizing: border-box;
 }
@@ -80,9 +81,9 @@ label {
     background-color: #2a5f94;
 }
 
+/* Alert messages */
 .alert-message {
     display: none;
-    /* Hidden by default */
     padding: 8px;
     border-radius: 4px;
     font-size: 14px;
@@ -101,12 +102,10 @@ label {
 
 .alert-message.success {
     background-color: #4caf50;
-    /* Success green */
     color: white;
 }
 
 .alert-message.error {
     background-color: #f44336;
-    /* Error red */
     color: white;
 }

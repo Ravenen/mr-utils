@@ -1,41 +1,56 @@
+// == GitLab MR Utils Content Script ==
+
 let g_requiredApprovals;
 let g_isKanbanView;
 let g_currentUserId;
 
+// Helper: Get browser API (cross-browser)
+function getBrowserApi() {
+  return typeof browser !== "undefined" ? browser : chrome;
+}
+
+// Helper: Sleep
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Initialize global settings and user ID
 async function initData() {
-  var browser = browser ? browser : chrome;
-  const res = await browser.storage.sync.get(["approvalsNeeded", "kanbanView"]);
+  const browserApi = getBrowserApi();
+  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView"]);
   g_requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
   g_isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
 
   const parsedUrl = new URL(window.location.href);
-  if (parsedUrl.searchParams.has("state") && !parsedUrl.searchParams.has("state", "opened")) g_isKanbanView = false;
-
-  console.log("requiredApprovals, isKanbanView: ", g_requiredApprovals, g_isKanbanView);
+  if (parsedUrl.searchParams.has("state") && !parsedUrl.searchParams.has("state", "opened")) {
+    g_isKanbanView = false;
+  }
 
   g_currentUserId = await getCurrentUserId();
 }
 
+// Routing: MR page or MR list
 const g_url = window.location.pathname;
 const mergeRequestRe = /merge_requests\/\d+/g;
 
-if (g_url.match(mergeRequestRe)) mergeRequestPage();
-else mergeRequestsList();
+if (g_url.match(mergeRequestRe)) {
+  mergeRequestPage();
+} else {
+  mergeRequestsList();
+}
 
-/*
- * mergeRequestsList
- */
+// == MR List (Kanban) ==
+
 async function mergeRequestsList() {
   await initData();
 
-  // Create the kanban board structure
+  // Create Kanban board structure
   function createKanbanBoard() {
     const kanbanBoard = document.createElement("div");
     kanbanBoard.classList.add("kanban-board");
-    console.log("Kanban board created:", kanbanBoard);
 
     const columns = ["To Review", "Pending", "Approved"];
-    columns.forEach((columnName) => {
+    columns.forEach(columnName => {
       const column = document.createElement("div");
       column.classList.add("kanban-column");
       column.dataset.column = columnName;
@@ -53,8 +68,6 @@ async function mergeRequestsList() {
     });
 
     const mrListContainer = document.querySelector(".content-list, .issues-list");
-    console.log("Merge requests list container element:", mrListContainer);
-
     if (mrListContainer) {
       mrListContainer.parentNode.insertBefore(kanbanBoard, mrListContainer);
       mrListContainer.style.display = "none";
@@ -62,127 +75,97 @@ async function mergeRequestsList() {
       console.error("Cannot find the merge requests list container element.");
       return null;
     }
-
     return kanbanBoard;
   }
 
+  // Add MR count to each column header
   function addColumnCounts(columns) {
     Object.keys(columns).forEach(columnName => {
       const column = columns[columnName];
       const header = column.parentElement.querySelector('.kanban-column-header');
       const count = column.children.length;
-
-      const countElement = document.createElement('span');
-      countElement.classList.add('kanban-count');
+      let countElement = header.querySelector('.kanban-count');
+      if (!countElement) {
+        countElement = document.createElement('span');
+        countElement.classList.add('kanban-count');
+        header.appendChild(countElement);
+      }
       countElement.textContent = ` (${count})`;
-
-      header.appendChild(countElement);
     });
   }
 
-  // Process each merge request
+  // Main: Process all MRs on the page
   async function processMergeRequests() {
-    let mergeRequestElementsArr = await new Promise(async (resolve) => {
-      let mr = document.querySelectorAll('.merge-request');
+    // Wait for MR elements to appear
+    let mergeRequestElementsArr = await (async () => {
+      let mr;
       while ((mr = document.querySelectorAll('.merge-request')).length === 0 && document.querySelector(".content-list")) {
-        await new Promise(r => setTimeout(r, 50));
+        await sleep(50);
       }
-      resolve([...mr]);
-    });
-
-    console.log("Merge request elements found:", mergeRequestElementsArr);
+      return [...mr];
+    })();
 
     let columns;
     if (g_isKanbanView) {
       const kanbanBoard = createKanbanBoard();
       if (!kanbanBoard) return;
-
       columns = {
         "To Review": kanbanBoard.querySelector('[data-column="To Review"] .kanban-column-body'),
         Pending: kanbanBoard.querySelector('[data-column="Pending"] .kanban-column-body'),
         Approved: kanbanBoard.querySelector('[data-column="Approved"] .kanban-column-body'),
       };
-      console.log("Kanban columns initialized:", columns);
     }
 
+    // Fetch MR data for each MR element
     const fetchPromises = mergeRequestElementsArr.map((mrElement, index) => {
       if (mrElement.tagName !== "LI") return Promise.resolve(null);
-
       const mrLink = mrElement.querySelector("[data-testid='issuable-title-link']");
       if (!mrLink) return Promise.resolve(null);
 
       const mrUrl = mrLink.getAttribute("href");
-      console.log("Merge request URL:", mrUrl);
-
       const url = new URL(mrUrl, window.location.origin);
       const path = url.pathname;
       const matches = path.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
-      if (!matches) {
-        console.error("Unable to parse MR URL:", mrUrl);
-        return Promise.resolve(null);
-      }
+      if (!matches) return Promise.resolve(null);
 
       const projectPath = matches[1];
       const mrIid = matches[2];
-      console.log("Project path:", projectPath);
-      console.log("MR IID:", mrIid);
-
-      return getMergeRequestData(projectPath, mrIid, g_currentUserId).then((mrData) => ({
-        index,
-        mrElement,
-        mrData,
+      return getMergeRequestData(projectPath, mrIid).then(mrData => ({
+        index, mrElement, mrData
       }));
     });
 
-    Promise.all(fetchPromises).then((results) => {
+    Promise.all(fetchPromises).then(results => {
       results
         .filter(Boolean)
         .sort((a, b) => a.index - b.index)
         .forEach(({ mrElement, mrData }) => {
-          if (mrData) {
-            addBadges(mrElement, mrData);
-            if (mrData.isDraft) {
-              mrElement.classList.add("dimmed");
-            }
-            if (g_isKanbanView) {
-              mrElement.classList.add("mr-card");
-              mrElement.classList.remove("!gl-flex");
-              let columnName;
-              if (mrData.hasUserApproved) {
-                columnName = "Approved";
-              } else if (mrData.unresolvedUserThreads > 0) {
-                columnName = "Pending";
-              } else {
-                columnName = "To Review";
-              }
-              console.log(`Column assigned for MR: ${columnName}`);
-              moveToColumn(mrElement, columnName, columns);
-            } else if (mrData.hasUserApproved && !mrData.isDraft) {
-              mrElement.classList.add("greened");
-            }
-
-            if (mrData.hasUserApproved) {
-              addBanners(mrElement, mrData);
-            }
+          if (!mrData) return;
+          addBadges(mrElement, mrData);
+          if (mrData.isDraft) mrElement.classList.add("dimmed");
+          if (g_isKanbanView) {
+            mrElement.classList.add("mr-card");
+            mrElement.classList.remove("!gl-flex");
+            let columnName;
+            if (mrData.hasUserApproved) columnName = "Approved";
+            else if (mrData.unresolvedUserThreads > 0) columnName = "Pending";
+            else columnName = "To Review";
+            moveToColumn(mrElement, columnName, columns);
+          } else if (mrData.hasUserApproved && !mrData.isDraft) {
+            mrElement.classList.add("greened");
           }
+          if (mrData.hasUserApproved) addBanners(mrElement, mrData);
         });
-
-      if (g_isKanbanView) {
-        addColumnCounts(columns);
-      }
+      if (g_isKanbanView) addColumnCounts(columns);
     });
   }
 
-  // Add badges to the MR element using GitLab's native styles
+  // Add badges to MR card
   function addBadges(mrElement, mrData) {
-    console.log("Adding badges to MR card:", mrElement);
-
     const controlsContainer = mrElement.querySelector(".controls");
-    if (!controlsContainer) {
-      console.error("Cannot find controls container in MR element.");
-      return;
-    }
+    if (!controlsContainer) return;
 
+    // Threads badges
     if (mrData.totalThreads > 0) {
       let threadsBadgesContainer = controlsContainer.querySelector(".kanban-badges");
       if (!threadsBadgesContainer) {
@@ -190,15 +173,13 @@ async function mergeRequestsList() {
         threadsBadgesContainer.classList.add("kanban-badges");
         controlsContainer.appendChild(threadsBadgesContainer);
       }
-
       const threadsBadge = constructBadge(
         `${mrData.totalThreads - mrData.unresolvedThreads}/${mrData.totalThreads}`,
         'Total threads',
         mrData.unresolvedThreads === 0 ? "badge-success" : "badge-danger"
       );
       threadsBadgesContainer.appendChild(threadsBadge);
-      const commentsIcon = constructIcon('/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#comments');
-      threadsBadge.prepend(commentsIcon);
+      threadsBadge.prepend(constructIcon('comments'));
 
       if (mrData.totalUserThreads > 0) {
         const userThreadsBadge = constructBadge(
@@ -207,43 +188,34 @@ async function mergeRequestsList() {
           mrData.unresolvedUserThreads === 0 ? "badge-success" : "badge-danger"
         );
         threadsBadgesContainer.appendChild(userThreadsBadge);
-        const userCommentsIcon = constructIcon('/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#comment-dots');
-        userThreadsBadge.prepend(userCommentsIcon);
+        userThreadsBadge.prepend(constructIcon('comment-dots'));
       }
 
+      // Remove native comments badge if present
       const nativeCommentsBadge = controlsContainer.querySelector('[data-testid="comments-icon"]')?.parentNode?.parentNode;
-      console.log("Issuable comments: ", nativeCommentsBadge);
-
       if (nativeCommentsBadge) {
         nativeCommentsBadge.insertAdjacentElement("afterend", threadsBadgesContainer);
         nativeCommentsBadge.remove();
       }
     }
 
+    // Approvals badge
     const approvalsBadge = constructBadge(
       `${mrData.approvalsGiven}/${mrData.approvalsRequired}`,
       'Approvals number',
       mrData.approvalsGiven >= mrData.approvalsRequired ? "badge-success" : "badge-danger"
     );
-
     const nativeApprovalBadge = controlsContainer.querySelector('[data-testid="mr-appovals"]');
     if (nativeApprovalBadge && nativeApprovalBadge.parentNode) {
       nativeApprovalBadge.parentNode.classList.add("gl-flex");
       nativeApprovalBadge.insertAdjacentElement("afterend", approvalsBadge);
-    } else if (mrData.approvalsGiven > 0) {
-      // badgesContainer.appendChild(approvalsBadge);
     }
-    console.log("Badges added to MR card.");
   }
 
+  // Add banners (NEW COMMITS/COMMENTS) to MR card
   function addBanners(mrElement, mrData) {
-    console.log("Adding banners to MR card:", mrElement);
-
     const infoContainer = mrElement.querySelector(".issuable-main-info");
-    if (!infoContainer) {
-      console.error("Cannot find controls container in MR element.");
-      return;
-    }
+    if (!infoContainer) return;
 
     let bannersContainer = infoContainer.querySelector(".kanban-banners");
     if (!bannersContainer) {
@@ -253,19 +225,14 @@ async function mergeRequestsList() {
     }
 
     if (mrData.savedCommitsNumber && mrData.savedCommitsNumber != mrData.commitsNumber) {
-      const newCommitsBanner = constructBanner(`NEW COMMITS`, "New commits since last acknowledge", "badge-tier");
-      bannersContainer.appendChild(newCommitsBanner);
+      bannersContainer.appendChild(constructBanner("NEW COMMITS", "New commits since last acknowledge", "badge-tier"));
     }
-
     if (mrData.savedCommentsNumber && mrData.savedCommentsNumber != mrData.commentsNumber) {
-      const newCommentsBanner = constructBanner(`NEW COMMENTS`, "New comments since last acknowledge", "badge-warning");
-      bannersContainer.appendChild(newCommentsBanner);
+      bannersContainer.appendChild(constructBanner("NEW COMMENTS", "New comments since last acknowledge", "badge-warning"));
     }
-
-    console.log("Banners added to MR card.");
   }
 
-  // Construct a badge using GitLab's styles
+  // Badge factory
   function constructBadge(text, title, badgeStyle) {
     const badgeSpan = document.createElement("span");
     badgeSpan.className = `gl-mt-1 gl-badge badge badge-pill has-tooltip ${badgeStyle}`;
@@ -274,7 +241,7 @@ async function mergeRequestsList() {
     return badgeSpan;
   }
 
-  // Construct a banner using GitLab's styles
+  // Banner factory
   function constructBanner(text, title, badgeStyle) {
     const badgeSpan = document.createElement("span");
     badgeSpan.className = `gl-badge badge has-tooltip ${badgeStyle} font-weight-bold`;
@@ -283,128 +250,85 @@ async function mergeRequestsList() {
     return badgeSpan;
   }
 
-  function constructIcon(href) {
+  // SVG icon factory (uses GitLab's sprite)
+  function constructIcon(iconType) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.classList.add('s14', 'gl-align-middle');
     svg.setAttribute('data-testid', 'comments-icon');
-
     const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', href);
-
+    // Use GitLab's sprite for icons
+    const iconMap = {
+      'comments': '/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#comments',
+      'comment-dots': '/assets/icons-8791a66659d025e0a4c801978c79a1fbd82db1d27d85f044a35728ea7cf0ae80.svg#comment-dots'
+    };
+    use.setAttribute('href', iconMap[iconType] || iconMap['comments']);
     svg.appendChild(use);
-
     return svg;
   }
 
-  // Move MR element to the appropriate kanban column
+  // Move MR element to kanban column
   function moveToColumn(mrElement, columnName, columns) {
-    console.log(`Moving MR element to column: ${columnName}`, mrElement);
     columns[columnName].appendChild(mrElement);
   }
 
-  // Initialize the script
-  console.log("Initializing processMergeRequests...");
-  if (!g_currentUserId) console.error("Could not obtain current user ID. Extension functionality may be limited.");
+  // Start processing
   processMergeRequests();
 }
 
-// Fetch current user ID via GitLab API
+// == API Helpers ==
+
+// Get current user ID
 function getCurrentUserId() {
   return fetch(`${window.location.origin}/api/v4/user`, { credentials: "same-origin" })
-    .then((response) => response.json())
-    .then((userData) => {
-      console.log("Current User Data:", userData);
-      return userData.id;
-    })
-    .catch((error) => {
-      console.error("Error fetching current user data:", error);
-      return null;
-    });
+    .then(response => response.json())
+    .then(userData => userData.id)
+    .catch(() => null);
 }
 
-// Fetch MR data
+// Fetch MR data (main, discussions, approvals, commits)
 function getMergeRequestData(projectPath, mrIid) {
-  if (!projectPath) return;
-  console.log("Project path:", projectPath);
-
+  if (!projectPath) return Promise.resolve(null);
   const encodedProjectPath = encodeURIComponent(projectPath);
   const baseUrl = `${window.location.origin}/api/v4/projects/${encodedProjectPath}/merge_requests/${mrIid}`;
 
-  console.log(`Fetching data for MR IID ${mrIid} from URL:`, baseUrl);
-
-  const fetchDiscussions = async (baseUrl, mrIid) => {
+  // Fetch all discussions (paginated)
+  const fetchDiscussions = async () => {
     let discussions = [];
     let nextPage = 1;
-
     while (nextPage) {
       const response = await fetch(`${baseUrl}/discussions?per_page=100&page=${nextPage}`, { credentials: "same-origin" });
-
-      if (!response.ok) {
-        console.error(`Error fetching discussions for MR ${mrIid}: ${response.status}`);
-        return {};
-      }
-
+      if (!response.ok) return [];
       const data = await response.json();
       discussions = discussions.concat(data);
-
       nextPage = response.headers.get("x-next-page");
     }
-
     return discussions;
   };
 
   return Promise.all([
-    fetch(`${baseUrl}/`, { credentials: "same-origin" })
-      .then((res) => res.json())
-      .catch((err) => {
-        console.error(`Error fetching discussions for MR ${mrIid}:`, err);
-        return {};
-      }),
-    fetchDiscussions(baseUrl, mrIid),
-    fetch(`${baseUrl}/approvals`, { credentials: "same-origin" })
-      .then((res) => res.json())
-      .catch((err) => {
-        console.error(`Error fetching approvals for MR ${mrIid}:`, err);
-        return {};
-      }),
-    fetch(`${baseUrl}/commits`, { credentials: "same-origin" })
-      .then((res) => res.json())
-      .catch((err) => {
-        console.error(`Error fetching approvals for MR ${mrIid}:`, err);
-        return {};
-      }),
-  ]).then(([mainData, discussionsData, approvalsData, commitsData]) => {
-    console.log(`Main data for MR IID ${mrIid}:`, mainData);
-    console.log(`Discussions data for MR IID ${mrIid}:`, discussionsData);
-    console.log(`Approvals data for MR IID ${mrIid}:`, approvalsData);
-    console.log(`Commits data for MR IID ${mrIid}:`, commitsData);
-
-    const mrData = processMRData(mainData, discussionsData, approvalsData, commitsData);
-    console.log(`Processed data for MR IID ${mrIid}:`, mrData);
-
-    return mrData;
-  });
+    fetch(`${baseUrl}/`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ({})),
+    fetchDiscussions(),
+    fetch(`${baseUrl}/approvals`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ({})),
+    fetch(`${baseUrl}/commits`, { credentials: "same-origin" }).then(res => res.json()).catch(() => ([])),
+  ]).then(([mainData, discussionsData, approvalsData, commitsData]) =>
+    processMRData(mainData, discussionsData, approvalsData, commitsData)
+  );
 }
 
-// Process MR discussions and approvals data
+// Process MR data for UI
 function processMRData(mainData, discussionsData, approvalsData, commitsData) {
-  const isDraft = mainData.title.toLowerCase().includes("draft:");
-  discussionsData = discussionsData.filter((discussion) => !discussion.individual_note);
+  const isDraft = mainData.title && mainData.title.toLowerCase().includes("draft:");
+  discussionsData = (discussionsData || []).filter(d => !d.individual_note);
   const totalThreads = discussionsData.length;
-  let unresolvedThreads = 0;
-  let totalUserThreads = 0;
-  let unresolvedUserThreads = 0;
+  let unresolvedThreads = 0, totalUserThreads = 0, unresolvedUserThreads = 0;
 
-  discussionsData.forEach((discussion) => {
+  discussionsData.forEach(discussion => {
     const notes = discussion.notes;
     if (!notes || notes.length === 0) return;
-
     const rootNote = notes[0];
     const isUserNote = rootNote.author && rootNote.author.id == g_currentUserId;
     if (isUserNote) totalUserThreads++;
-
-    const isResolved = rootNote.resolved;
-    if (!isResolved) {
+    if (!rootNote.resolved) {
       unresolvedThreads++;
       if (isUserNote) unresolvedUserThreads++;
     }
@@ -413,24 +337,18 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
   const approvalsRequired = g_requiredApprovals;
   const approvalsGiven = approvalsData.approved_by ? approvalsData.approved_by.length : 0;
   const hasUserApproved = approvalsData.approved_by
-    ? approvalsData.approved_by.some((user) => user.user && user.user.id == g_currentUserId)
+    ? approvalsData.approved_by.some(user => user.user && user.user.id == g_currentUserId)
     : false;
 
-  console.log(`MR data processed - Total threads: ${totalThreads}, Unresolved threads: ${unresolvedThreads}`);
-  console.log(`User threads - Total: ${totalUserThreads}, Unresolved: ${unresolvedUserThreads}`);
-  console.log(`Approvals given: ${approvalsGiven}, Has user approved: ${hasUserApproved}`);
+  const commentsNumber = mainData.user_notes_count || 0;
+  const commitsNumber = Array.isArray(commitsData) ? commitsData.length : 0;
 
-  const commentsNumber = mainData.user_notes_count;
-  const commitsNumber = commitsData.length;
-
-  const mrUrl = new URL(mainData.web_url);
-  const pathname = mrUrl.pathname;
-
-  let savedData = JSON.parse(localStorage.getItem(pathname + "/mr-utils"));
-  if (!savedData) {
-    savedData = {};
-  }
-
+  const mrUrl = mainData.web_url ? new URL(mainData.web_url) : null;
+  const pathname = mrUrl ? mrUrl.pathname : "";
+  let savedData = {};
+  try {
+    savedData = JSON.parse(localStorage.getItem(pathname + "/mr-utils")) || {};
+  } catch {}
   const savedCommentsNumber = savedData["comments_number"];
   const savedCommitsNumber = savedData["commits_number"];
 
@@ -450,17 +368,13 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
   };
 }
 
-/*
- * mergeRequestsList
- */
+// == MR Page (Approve Checks) ==
 
-/*
- * mergeRequestPage
- */
 let approveBtn = null;
 let checksBar = null;
 let mergeBar = null;
 
+// Create a checklist item
 function createCheck(id, text) {
   const block = document.createElement("div");
   block.style.display = "block";
@@ -472,18 +386,16 @@ function createCheck(id, text) {
   checkbox.type = "checkbox";
   checkbox.id = id;
 
-  let checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
-  if (!checkStatus) {
-    checkStatus = {};
-  }
-  if (!checkStatus[id]) {
-    checkStatus[id] = false;
-  }
+  let checkStatus = {};
+  try {
+    checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils")) || {};
+  } catch {}
+  if (!checkStatus[id]) checkStatus[id] = false;
   checkbox.checked = checkStatus[id];
   localStorage.setItem(g_url + "/mr-utils", JSON.stringify(checkStatus));
 
   checkbox.onclick = (cb) => {
-    let obj = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
+    let obj = JSON.parse(localStorage.getItem(g_url + "/mr-utils")) || {};
     obj[id] = cb.target.checked;
     localStorage.setItem(g_url + "/mr-utils", JSON.stringify(obj));
     updateApproveVisibility();
@@ -499,17 +411,19 @@ function createCheck(id, text) {
   return block;
 }
 
+// Are all checks ticked?
 function isConditionsChecked() {
-  const checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
-  return checkStatus && Object.keys(checkStatus).reduce((res, current) => res && checkStatus[current], true);
+  const checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils")) || {};
+  return Object.keys(checkStatus).length > 0 &&
+    Object.values(checkStatus).every(Boolean);
 }
 
+// Show/hide approve button and merge bar
 function updateApproveVisibility() {
+  if (!approveBtn || !mergeBar) return;
   if (isConditionsChecked()) {
-    if (approveBtn) {
-      approveBtn.style.setProperty("display", "flex", "important");
-      mergeBar.style.setProperty("display", "block", "important");
-    }
+    approveBtn.style.setProperty("display", "flex", "important");
+    mergeBar.style.setProperty("display", "block", "important");
   } else {
     if (!approveBtn.textContent.includes("Revoke approval\n"))
       approveBtn.style.setProperty("display", "none", "important");
@@ -517,37 +431,37 @@ function updateApproveVisibility() {
   }
 }
 
+// Save current comments/commits count after approval
 async function updateSavedData() {
   const body = document.querySelector('body');
-  const projectPath = body.attributes['data-project-full-path'].value;
-  const mrIid = body.attributes['data-page-type-id'].value;
+  const projectPath = body?.attributes['data-project-full-path']?.value;
+  const mrIid = body?.attributes['data-page-type-id']?.value;
+  if (!projectPath || !mrIid) return;
   const mrData = await getMergeRequestData(projectPath, mrIid);
 
-  let savedData = JSON.parse(localStorage.getItem(g_url + "/mr-utils"));
-  if (!savedData) {
-    savedData = {};
-  }
+  let savedData = {};
+  try {
+    savedData = JSON.parse(localStorage.getItem(g_url + "/mr-utils")) || {};
+  } catch {}
   savedData["comments_number"] = mrData.commentsNumber;
   savedData["commits_number"] = mrData.commitsNumber;
   localStorage.setItem(g_url + "/mr-utils", JSON.stringify(savedData));
 }
 
+// Main: MR page logic
 async function mergeRequestPage() {
   await initData();
 
   const intervalId = window.setInterval(function () {
+    let approveBar;
     try {
-      var approveBar = document.getElementsByClassName("js-mr-approvals")[0].getElementsByTagName("button")[0]
-        .parentElement.parentElement;
-    } catch (error) {
-      console.log(error);
-    }
-
+      approveBar = document.getElementsByClassName("js-mr-approvals")[0]?.getElementsByTagName("button")[0]?.parentElement?.parentElement;
+    } catch {}
     if (!approveBar || approveBar.textContent.includes("Checking approval status")) return;
 
     approveBtn = approveBar.getElementsByTagName("button")[0];
-    mergeBar =
-      document.getElementsByClassName("mr-widget-body-ready-merge")[0].parentElement.parentElement.parentElement;
+    mergeBar = document.getElementsByClassName("mr-widget-body-ready-merge")[0]?.parentElement?.parentElement?.parentElement;
+    if (!approveBtn || !mergeBar) return;
 
     approveBtn.parentElement.style.height = "32px";
     approveBtn.addEventListener('click', () => updateSavedData());
@@ -557,24 +471,18 @@ async function mergeRequestPage() {
     checksBar = document.createElement("div");
     checksBar.style.display = "block";
     checksBar.style.width = "100%";
+    checksBar.classList.add("gl-z-1"); // Needed for GitLab UI to be elevated above accessability elements
 
     const headingElement = document.createElement("p");
-    const headingText = document.createTextNode("Check following conditions to approve:");
     headingElement.style.fontWeight = "600";
-    headingElement.appendChild(headingText);
-
-    const checkDocs = createCheck("docs_check", "Is documentation updated?");
-    const checkTarget = createCheck("branch_check", "Is merge target right?");
+    headingElement.appendChild(document.createTextNode("Check following conditions to approve:"));
 
     checksBar.appendChild(headingElement);
-    checksBar.appendChild(checkDocs);
-    checksBar.appendChild(checkTarget);
+    checksBar.appendChild(createCheck("docs_check", "Is documentation updated?"));
+    checksBar.appendChild(createCheck("branch_check", "Is merge target right?"));
 
     approveBar.parentElement.prepend(checksBar);
 
     clearInterval(intervalId);
   }, 100);
 }
-/*
- * mergeRequestPage
- */
