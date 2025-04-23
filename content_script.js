@@ -3,6 +3,8 @@
 let g_requiredApprovals;
 let g_isKanbanView;
 let g_currentUserId;
+let g_currentBoard = null;
+let g_originalListContainer = null;
 
 // Helper: Get browser API (cross-browser)
 function getBrowserApi() {
@@ -22,11 +24,51 @@ async function initData() {
   g_isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
 
   const parsedUrl = new URL(window.location.href);
-  if (parsedUrl.searchParams.has("state") && !parsedUrl.searchParams.has("state", "opened")) {
-    g_isKanbanView = false;
-  }
+  g_isKanbanView = g_isKanbanView && (!parsedUrl.searchParams.has("state") || parsedUrl.searchParams.get("state") === "opened");
 
   g_currentUserId = await getCurrentUserId();
+}
+
+// Clean up existing board
+function cleanupBoard() {
+  if (g_currentBoard) {
+    g_currentBoard.remove();
+    g_currentBoard = null;
+    if (g_originalListContainer) {
+      g_originalListContainer.style.visibility = "";
+      g_originalListContainer.style.position = "";
+      g_originalListContainer.style.left = "";
+      g_originalListContainer = null;
+    }
+  }
+}
+
+// URL change detection
+let lastUrl = location.href;
+new MutationObserver(() => {
+  const url = location.href;
+  if (url !== lastUrl) {
+    lastUrl = url;
+    onUrlChange();
+  }
+}).observe(document, { subtree: true, childList: true });
+
+// Handle URL changes
+async function onUrlChange() {
+  console.log("onUrlChange");
+  cleanupBoard();
+  const parsedUrl = new URL(window.location.href);
+  const isOpened = !parsedUrl.searchParams.has("state") || parsedUrl.searchParams.get("state") === "opened";
+  g_isKanbanView = g_isKanbanView && isOpened;
+  
+  const g_url = window.location.pathname;
+  const mergeRequestRe = /merge_requests\/\d+/g;
+
+  if (g_url.match(mergeRequestRe)) {
+    mergeRequestPage();
+  } else {
+    mergeRequestsList();
+  }
 }
 
 // Routing: MR page or MR list
@@ -69,12 +111,16 @@ async function mergeRequestsList() {
 
     const mrListContainer = document.querySelector(".content-list, .issues-list");
     if (mrListContainer) {
+      g_originalListContainer = mrListContainer;
       mrListContainer.parentNode.insertBefore(kanbanBoard, mrListContainer);
-      mrListContainer.style.display = "none";
+      mrListContainer.style.visibility = "hidden";
+      mrListContainer.style.position = "absolute";
+      mrListContainer.style.left = "-9999px";
     } else {
       console.error("Cannot find the merge requests list container element.");
       return null;
     }
+    g_currentBoard = kanbanBoard;
     return kanbanBoard;
   }
 
@@ -268,7 +314,21 @@ async function mergeRequestsList() {
 
   // Move MR element to kanban column
   function moveToColumn(mrElement, columnName, columns) {
-    columns[columnName].appendChild(mrElement);
+    const clonedElement = mrElement.cloneNode(true);
+    clonedElement.classList.add("mr-card");
+    clonedElement.classList.remove("!gl-flex");
+    
+    // Ensure click events are preserved on the clone
+    const originalLinks = mrElement.querySelectorAll('a');
+    const clonedLinks = clonedElement.querySelectorAll('a');
+    originalLinks.forEach((link, index) => {
+      if (clonedLinks[index]) {
+        clonedLinks[index].href = link.href;
+        clonedLinks[index].onclick = link.onclick;
+      }
+    });
+
+    columns[columnName].appendChild(clonedElement);
   }
 
   // Start processing
