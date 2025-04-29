@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Gitlab merge requests utils",
+    "name": "MRFlow",
     "version": "1.2.0",
-    "description": "Add different utils for gitlab merge requests",
+    "description": "Utilities for GItLab merge requests that make life easier and project cleaner",
     "icons": {
         "48": "icons/icon48.png",
         "96": "icons/icon96.png"
