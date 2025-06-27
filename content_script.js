@@ -183,6 +183,11 @@ async function mergeRequestsList() {
           if (g_isKanbanView) {
             mrElement.classList.add("mr-card");
             mrElement.classList.remove("!gl-flex");
+            // Remove all classes except 'issuable-meta' to fix styling issues
+            const metaEl = mrElement.getElementsByClassName("issuable-meta")?.[0];
+            if (metaEl) {
+              metaEl.className = "issuable-meta"
+            }
             let columnName;
             if (mrData.hasUserApproved) columnName = "Approved";
             else if (mrData.unresolvedUserThreads > 0) columnName = "Pending";
