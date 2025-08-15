@@ -135,7 +135,7 @@ async function mergeRequestsList() {
     // Wait for MR elements to appear
     let mergeRequestElementsArr = await (async () => {
       let mr;
-      while ((mr = document.querySelectorAll('.merge-request')).length === 0 && document.querySelector(".content-list")) {
+      while ((mr = document.querySelectorAll('.merge-request')).length === 0) {
         await sleep(50);
       }
       return [...mr];
@@ -246,10 +246,10 @@ async function mergeRequestsList() {
       'Approvals number',
       mrData.approvalsGiven >= mrData.approvalsRequired ? "badge-success" : "badge-danger"
     );
-    const nativeApprovalBadge = controlsContainer.querySelector('[data-testid="mr-appovals"]');
-    if (nativeApprovalBadge && nativeApprovalBadge.parentNode) {
-      nativeApprovalBadge.parentNode.classList.add("gl-flex");
-      nativeApprovalBadge.insertAdjacentElement("afterend", approvalsBadge);
+    const nativeApprovalBadge = controlsContainer.querySelector('[data-testid="mr-approvals"]');
+    if (nativeApprovalBadge) {
+      nativeApprovalBadge.classList.add("gl-flex");
+      nativeApprovalBadge.appendChild(approvalsBadge);
     }
   }
 
@@ -276,7 +276,7 @@ async function mergeRequestsList() {
   // Badge factory
   function constructBadge(text, title, badgeStyle) {
     const badgeSpan = document.createElement("span");
-    badgeSpan.className = `gl-mt-1 gl-badge badge badge-pill has-tooltip ${badgeStyle}`;
+    badgeSpan.className = `gl-badge badge badge-pill has-tooltip ${badgeStyle}`;
     badgeSpan.textContent = text;
     badgeSpan.title = title;
     return badgeSpan;
