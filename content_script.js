@@ -519,7 +519,7 @@ async function mergeRequestPage() {
     if (!approveBtn || !mergeBar) return;
 
     approveBtn.parentElement.style.height = "32px";
-    approveBtn.addEventListener('click', () => updateSavedData());
+    updateSavedData();
 
     updateApproveVisibility();
 
