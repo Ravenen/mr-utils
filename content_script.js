@@ -179,7 +179,6 @@ async function mergeRequestsList() {
           if (!mrData) return;
           addBadges(mrElement, mrData);
           if (mrData.isDraft) mrElement.classList.add("dimmed");
-          if (mrData.hasUserApproved) addBanners(mrElement, mrData);
           if (g_isKanbanView) {
             mrElement.classList.add("mr-card");
             mrElement.classList.remove("!gl-flex");
@@ -192,6 +191,7 @@ async function mergeRequestsList() {
             if (mrData.hasUserApproved) columnName = "Approved";
             else if (mrData.unresolvedUserThreads > 0) columnName = "Pending";
             else columnName = "To Review";
+            if (["Approved", "Pending"].includes(columnName)) addBanners(mrElement, mrData);
             moveToColumn(mrElement, columnName, columns);
           } else if (mrData.hasUserApproved && !mrData.isDraft) {
             mrElement.classList.add("greened");
@@ -266,10 +266,13 @@ async function mergeRequestsList() {
     }
 
     if (mrData.savedCommitsNumber && mrData.savedCommitsNumber != mrData.commitsNumber) {
-      bannersContainer.appendChild(constructBanner("NEW COMMITS", "New commits since last acknowledge", "badge-tier"));
+      bannersContainer.appendChild(constructBanner("NEW COMMITS", "New commits since last visit", "badge-tier"));
     }
-    if (mrData.savedCommentsNumber && mrData.savedCommentsNumber != mrData.commentsNumber) {
-      bannersContainer.appendChild(constructBanner("NEW COMMENTS", "New comments since last acknowledge", "badge-warning"));
+    if (mrData.savedRepliesToUserThreads && mrData.savedRepliesToUserThreads != mrData.repliesToUserThreads) {
+      bannersContainer.appendChild(constructBanner("NEW REPLIES", "New replies to your threads since last visit", "badge-info"));
+    }
+    if (mrData.savedCommentsNumber && mrData.savedCommentsNumber != mrData.commentsNumber && (mrData.commentsNumber - mrData.savedCommentsNumber != mrData.repliesToUserThreads - mrData.savedRepliesToUserThreads)) {
+      bannersContainer.appendChild(constructBanner("NEW COMMENTS", "New comments since last visit", "badge-warning"));
     }
   }
 
@@ -375,7 +378,7 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
   const isDraft = mainData.title && mainData.title.toLowerCase().includes("draft:");
   discussionsData = (discussionsData || []).filter(d => !d.individual_note);
   const totalThreads = discussionsData.length;
-  let unresolvedThreads = 0, totalUserThreads = 0, unresolvedUserThreads = 0;
+  let unresolvedThreads = 0, totalUserThreads = 0, unresolvedUserThreads = 0, repliesToUserThreads = 0;
 
   discussionsData.forEach(discussion => {
     const notes = discussion.notes;
@@ -385,7 +388,14 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
     if (isUserNote) totalUserThreads++;
     if (!rootNote.resolved) {
       unresolvedThreads++;
-      if (isUserNote) unresolvedUserThreads++;
+      if (isUserNote) 
+      {
+        unresolvedUserThreads++;
+        if (notes.length > 1) {
+          repliesToUserThreads += notes.filter(note => note.author && note.author.id != g_currentUserId).length;
+        }
+      }
+
     }
   });
 
@@ -406,12 +416,14 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
   } catch {}
   const savedCommentsNumber = savedData["comments_number"];
   const savedCommitsNumber = savedData["commits_number"];
+  const savedRepliesToUserThreads = savedData["replies_to_user_threads"];
 
   return {
     totalThreads,
     unresolvedThreads,
     totalUserThreads,
     unresolvedUserThreads,
+    repliesToUserThreads,
     approvalsGiven,
     approvalsRequired,
     hasUserApproved,
@@ -420,6 +432,7 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
     savedCommentsNumber,
     commitsNumber,
     savedCommitsNumber,
+    savedRepliesToUserThreads,
   };
 }
 
@@ -506,6 +519,7 @@ async function updateSavedData() {
   } catch {}
   savedData["comments_number"] = mrData.commentsNumber;
   savedData["commits_number"] = mrData.commitsNumber;
+  savedData["replies_to_user_threads"] = mrData.repliesToUserThreads;
   localStorage.setItem(g_url + "/mr-utils", JSON.stringify(savedData));
 }
 
