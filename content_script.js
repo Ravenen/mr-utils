@@ -468,9 +468,16 @@ function createCheck(id, text) {
 
 // Are all checks ticked?
 function isConditionsChecked() {
+  // Retrieve all check statuses from localStorage
   const checkStatus = JSON.parse(localStorage.getItem(g_url + "/mr-utils")) || {};
-  return Object.keys(checkStatus).length > 0 &&
-    Object.values(checkStatus).every(Boolean);
+
+  // Filter only keys ending with "_check"
+  const checks = Object.entries(checkStatus)
+    .filter(([key]) => key.endsWith("_check"))
+    .map(([, value]) => value);
+
+  // Return true if there is at least one check and all are checked
+  return checks.length > 0 && checks.every(Boolean);
 }
 
 // Show/hide approve button and merge bar
@@ -486,7 +493,6 @@ function updateApproveVisibility() {
   }
 }
 
-// Save current comments/commits count after approval
 async function updateSavedData() {
   const body = document.querySelector('body');
   const projectPath = body?.attributes['data-project-full-path']?.value;
