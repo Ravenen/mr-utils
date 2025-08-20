@@ -526,6 +526,26 @@ async function updateSavedData() {
 // Main: MR page logic
 async function mergeRequestPage() {
   await initData();
+  // Debounce utility
+  function debounce(fn, delay) {
+    let timer = null;
+    return function (...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  // Debounced updateSavedData
+  const debouncedUpdateSavedData = debounce(updateSavedData, 1000);
+
+  // Add: Update saved data on any button click (debounced)
+  document.addEventListener('click', function (e) {
+    if (e.target?.tagName === 'BUTTON' || e.target?.parentElement?.tagName === 'BUTTON') {
+      debouncedUpdateSavedData();
+    }
+  }, true);
+
+  updateSavedData();
 
   const intervalId = window.setInterval(function () {
     let approveBar;
@@ -539,7 +559,6 @@ async function mergeRequestPage() {
     if (!approveBtn || !mergeBar) return;
 
     approveBtn.parentElement.style.height = "32px";
-    updateSavedData();
 
     updateApproveVisibility();
 
