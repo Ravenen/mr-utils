@@ -265,13 +265,13 @@ async function mergeRequestsList() {
       infoContainer.insertBefore(bannersContainer, infoContainer.firstChild);
     }
 
-    if (mrData.savedCommitsNumber && mrData.savedCommitsNumber != mrData.commitsNumber) {
+    if (mrData.savedCommitsNumber != mrData.commitsNumber) {
       bannersContainer.appendChild(constructBanner("NEW COMMITS", "New commits since last visit", "badge-tier"));
     }
-    if (mrData.savedRepliesToUserThreads && mrData.savedRepliesToUserThreads != mrData.repliesToUserThreads) {
+    if (mrData.savedRepliesToUserThreads != mrData.repliesToUserThreads) {
       bannersContainer.appendChild(constructBanner("NEW REPLIES", "New replies to your threads since last visit", "badge-info"));
     }
-    if (mrData.savedCommentsNumber && mrData.savedCommentsNumber != mrData.commentsNumber && (mrData.commentsNumber - mrData.savedCommentsNumber != mrData.repliesToUserThreads - mrData.savedRepliesToUserThreads)) {
+    if (mrData.savedCommentsNumber != mrData.commentsNumber && (mrData.commentsNumber - mrData.savedCommentsNumber != mrData.repliesToUserThreads - mrData.savedRepliesToUserThreads)) {
       bannersContainer.appendChild(constructBanner("NEW COMMENTS", "New comments since last visit", "badge-warning"));
     }
   }
