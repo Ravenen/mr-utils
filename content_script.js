@@ -179,6 +179,7 @@ async function mergeRequestsList() {
           if (!mrData) return;
           addBadges(mrElement, mrData);
           if (mrData.isDraft) mrElement.classList.add("dimmed");
+          if (mrData.isReady) mrElement.classList.add("ready");
           if (g_isKanbanView) {
             mrElement.classList.add("mr-card");
             mrElement.classList.remove("!gl-flex");
@@ -375,7 +376,7 @@ function getMergeRequestData(projectPath, mrIid) {
 
 // Process MR data for UI
 function processMRData(mainData, discussionsData, approvalsData, commitsData) {
-  const isDraft = mainData.title && mainData.title.toLowerCase().includes("draft:");
+  const isDraft = mainData.draft;
   discussionsData = (discussionsData || []).filter(d => !d.individual_note);
   const totalThreads = discussionsData.length;
   let unresolvedThreads = 0, totalUserThreads = 0, unresolvedUserThreads = 0, repliesToUserThreads = 0;
@@ -405,6 +406,8 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
     ? approvalsData.approved_by.some(user => user.user && user.user.id == g_currentUserId)
     : false;
 
+  const isReady = mainData.detailed_merge_status === 'mergeable' && approvalsGiven >= approvalsRequired;
+
   const commentsNumber = mainData.user_notes_count || 0;
   const commitsNumber = Array.isArray(commitsData) ? commitsData.length : 0;
 
@@ -433,6 +436,7 @@ function processMRData(mainData, discussionsData, approvalsData, commitsData) {
     commitsNumber,
     savedCommitsNumber,
     savedRepliesToUserThreads,
+    isReady,
   };
 }
 

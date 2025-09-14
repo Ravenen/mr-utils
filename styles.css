@@ -43,6 +43,12 @@
     background-color: var(--gl-background-color-default) !important;
 }
 
+.ready {
+    box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
+    border-color: var(--gl-badge-success-text-color-default) !important;
+}
+ */
+
 /* Info container in MR card */
 .mr-card > .issuable-info-container {
     display: block !important;
