@@ -179,7 +179,7 @@ async function mergeRequestsList() {
           if (!mrData) return;
           addBadges(mrElement, mrData);
           if (mrData.isDraft) mrElement.classList.add("dimmed");
-          if (mrData.isReady) mrElement.classList.add("ready");
+          if (mrData.isReady) mrElement.classList.add("mr-ready");
           if (g_isKanbanView) {
             mrElement.classList.add("mr-card");
             mrElement.classList.remove("!gl-flex");

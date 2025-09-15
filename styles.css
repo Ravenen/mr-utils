@@ -43,7 +43,7 @@
     background-color: var(--gl-background-color-default) !important;
 }
 
-.ready {
+.mr-ready {
     box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
     border-color: var(--gl-badge-success-text-color-default) !important;
 }
