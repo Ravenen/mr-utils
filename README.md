@@ -8,9 +8,10 @@ Browser extension that makes GitLab merge requests easier to review. Works on gi
 - Kanban board with three columns: **To Review**, **Pending** (you have unresolved threads) and **Approved** (you approved).
 - Thread badges: resolved/total threads, and resolved/total of *your* threads.
 - Approvals badge: given/required approvals.
-- **Rebase needed** and **Conflicts** badges.
+- **CONFLICTS** and **NEEDS REBASE** banners (red: the author has to act).
 - **NEW COMMITS / NEW REPLIES / NEW COMMENTS** banners since your last visit.
-- Draft MRs are dimmed, MRs that are ready to merge are highlighted.
+- Draft MRs are dimmed (hover to read), MRs that are ready to merge are highlighted.
+- One GraphQL request per 20 MRs; the board is filled all at once and shown instantly from cache on repeat visits.
 
 **Merge request page**
 - A checklist you must tick before the **Approve** and **Merge** buttons appear.
@@ -38,6 +39,7 @@ Disable the store version while testing, otherwise both run on the page.
 Click the extension icon:
 - **Approvals Needed**: how many approvals an MR needs (used by the approvals badge and the "ready" highlight).
 - **Enable Kanban Board**: Kanban on the list or the native list.
+- **Kanban loading**: fill the board all at once (default) or show each card as soon as it loads.
 - **Reset approval checks on new commits**.
 
 ## Privacy

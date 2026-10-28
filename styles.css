@@ -65,12 +65,6 @@
     display: flex;
 }
 
-/* Rebase/conflicts badges */
-.mr-status-badges {
-    display: flex;
-    gap: 4px;
-}
-
 /* Banners container */
 .kanban-banners {
     margin: 5px 0px;
@@ -79,6 +73,15 @@
 /* Banner badge spacing */
 .kanban-banners > .badge {
     margin-right: 5px;
+}
+
+/* Banners that need an action from the author (CONFLICTS, NEEDS REBASE) */
+.mrflow-banner-action {
+    gap: 4px;
+}
+
+.mrflow-banner-action svg {
+    fill: currentColor;
 }
 
 /* Badge pill right spacing */
@@ -97,7 +100,14 @@ span.badge-pill:has(+ span.badge-pill) {
 
 /* Dimmed (draft) MR */
 .dimmed > div {
-    opacity: 0.5;
+    opacity: 0.3;
+    filter: grayscale(1);
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.dimmed:hover > div {
+    opacity: 1;
+    filter: none;
 }
 
 /* Approved MR highlight */

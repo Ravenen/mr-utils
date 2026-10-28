@@ -2,6 +2,7 @@
 
 let g_requiredApprovals;
 let g_isKanbanView;
+let g_boardLoading;
 let g_resetChecksOnNewCommits;
 let g_currentUserId;
 let g_currentBoard = null;
@@ -12,7 +13,9 @@ const MR_PAGE_RE = /merge_requests\/\d+/;
 const STORAGE_SUFFIX = "/mr-utils";
 const MAX_CONCURRENT_REQUESTS = 4;
 const MAX_RETRIES = 3;
-const ACTIVITY_CACHE_TTL_MS = 2 * 60 * 1000;
+const MAX_RETRY_AFTER_S = 10;
+const GRAPHQL_BATCH_SIZE = 20;
+const LIST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WAIT_TIMEOUT_MS = 30 * 1000;
 
 // Helper: Get browser API (cross-browser)
@@ -56,12 +59,19 @@ function getCanonicalMrPath(pathname) {
   return match ? match[1] : pathname;
 }
 
+// Helper: "gid://gitlab/User/42" or 42 -> 42
+function parseUserId(id) {
+  if (id === undefined || id === null) return null;
+  return parseInt(String(id).split("/").pop(), 10);
+}
+
 // Initialize global settings and user ID
 async function initData() {
   const browserApi = getBrowserApi();
-  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView", "resetChecksOnNewCommits"]);
+  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView", "boardLoading", "resetChecksOnNewCommits"]);
   g_requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
   g_isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
+  g_boardLoading = res.boardLoading === "progressive" ? "progressive" : "all";
   g_resetChecksOnNewCommits = res.resetChecksOnNewCommits !== undefined ? res.resetChecksOnNewCommits : true;
 
   const parsedUrl = new URL(window.location.href);
@@ -72,7 +82,7 @@ async function initData() {
 
 // Clean up existing board (including boards left behind by stale runs)
 function cleanupBoard() {
-  document.querySelectorAll(".kanban-board").forEach(board => board.remove());
+  document.querySelectorAll(".kanban-board, .mrflow-alert").forEach(el => el.remove());
   g_currentBoard = null;
   if (g_originalListContainer) {
     g_originalListContainer.style.visibility = "";
@@ -154,7 +164,7 @@ async function mergeRequestsList() {
     Object.keys(columns).forEach(columnName => {
       const column = columns[columnName];
       const header = column.parentElement.querySelector('.kanban-column-header');
-      const count = column.children.length;
+      const count = column.querySelectorAll(".mr-card").length;
       let countElement = header.querySelector('.kanban-count');
       if (!countElement) {
         countElement = document.createElement('span');
@@ -165,6 +175,53 @@ async function mergeRequestsList() {
     });
   }
 
+  // Native GitLab spinner shown in every column until the board is filled
+  function showColumnsLoading(columns) {
+    Object.values(columns).forEach(column => {
+      const spinner = document.createElement("li");
+      spinner.className = "mrflow-loading gl-flex gl-justify-center gl-p-5";
+      spinner.innerHTML = '<span class="gl-spinner gl-spinner-md gl-spinner-dark" aria-label="Loading"></span>';
+      column.appendChild(spinner);
+    });
+  }
+
+  function getColumnName(mrData) {
+    if (mrData?.hasUserApproved) return "Approved";
+    if (mrData?.unresolvedUserThreads > 0) return "Pending";
+    return "To Review";
+  }
+
+  // Decorate an MR element (a board clone, or the native item in list view)
+  function decorateMergeRequest(mrElement, mrData, { showSeenBanners }) {
+    addBadges(mrElement, mrData);
+    addBanners(mrElement, mrData, { showSeenBanners });
+    if (mrData.isDraft) mrElement.classList.add("dimmed");
+    if (mrData.isReady) mrElement.classList.add("mr-ready");
+  }
+
+  // Put a decorated clone of the native item into its column; order inside a column is kept via CSS `order`
+  function renderCard(columns, { index, mrElement }, mrData) {
+    const card = mrElement.cloneNode(true);
+    card.classList.add("mr-card");
+    card.classList.remove("!gl-flex");
+    card.style.order = index;
+    // Remove all classes except 'issuable-meta' to fix styling issues
+    const metaEl = card.getElementsByClassName("issuable-meta")?.[0];
+    if (metaEl) {
+      metaEl.className = "issuable-meta"
+    }
+    const columnName = getColumnName(mrData);
+    if (mrData) decorateMergeRequest(card, mrData, { showSeenBanners: columnName !== "To Review" });
+    columns[columnName].appendChild(card);
+  }
+
+  // (Re)build all cards at once
+  function renderBoard(columns, items, dataByItem) {
+    Object.values(columns).forEach(column => column.replaceChildren());
+    items.forEach(item => renderCard(columns, item, dataByItem.get(item)));
+    addColumnCounts(columns);
+  }
+
   // Main: Process all MRs on the page
   async function processMergeRequests() {
     // Wait for MR elements to appear (an empty list never gets any, hence the timeout)
@@ -173,21 +230,6 @@ async function mergeRequestsList() {
       return elements.length > 0 ? elements : null;
     }, { isStale });
     if (!mergeRequestElementsArr || isStale()) return;
-
-    let columns;
-    if (g_isKanbanView) {
-      const mrListContainer = mergeRequestElementsArr[0].closest("ul");
-      if (!mrListContainer) {
-        console.error("Cannot find the merge requests list container element.");
-        return;
-      }
-      const kanbanBoard = createKanbanBoard(mrListContainer);
-      columns = {
-        "To Review": kanbanBoard.querySelector('[data-column="To Review"] .kanban-column-body'),
-        Pending: kanbanBoard.querySelector('[data-column="Pending"] .kanban-column-body'),
-        Approved: kanbanBoard.querySelector('[data-column="Approved"] .kanban-column-body'),
-      };
-    }
 
     // Collect MR references from the list
     const items = [];
@@ -203,35 +245,56 @@ async function mergeRequestsList() {
       items.push({ index, mrElement, projectPath: matches[1], mrIid: matches[2] });
     });
 
-    // Render each MR as soon as its data arrives; order inside a column is kept via CSS `order`
-    const onMergeRequestData = ({ index, mrElement }, mrData) => {
-      if (isStale()) return;
-      if (mrData) {
-        addBadges(mrElement, mrData);
-        if (mrData.isDraft) mrElement.classList.add("dimmed");
-        if (mrData.isReady) mrElement.classList.add("mr-ready");
-      }
-      if (g_isKanbanView) {
-        mrElement.classList.add("mr-card");
-        mrElement.classList.remove("!gl-flex");
-        // Remove all classes except 'issuable-meta' to fix styling issues
-        const metaEl = mrElement.getElementsByClassName("issuable-meta")?.[0];
-        if (metaEl) {
-          metaEl.className = "issuable-meta"
-        }
-        let columnName;
-        if (mrData?.hasUserApproved) columnName = "Approved";
-        else if (mrData?.unresolvedUserThreads > 0) columnName = "Pending";
-        else columnName = "To Review";
-        if (mrData && ["Approved", "Pending"].includes(columnName)) addBanners(mrElement, mrData);
-        moveToColumn(mrElement, columnName, columns, index);
-        addColumnCounts(columns);
-      } else if (mrData?.hasUserApproved && !mrData.isDraft) {
-        mrElement.classList.add("greened");
-      }
+    const onError = error => {
+      if (!isStale()) showApiError(mergeRequestElementsArr[0].closest("ul"), error);
     };
 
-    await getMergeRequestsData(items, onMergeRequestData, { isStale });
+    // Native list view: decorate the native items once fresh data is in
+    if (!g_isKanbanView) {
+      await getMergeRequestsData(items, (item, mrData) => {
+        if (isStale() || !mrData) return;
+        decorateMergeRequest(item.mrElement, mrData, { showSeenBanners: false });
+        if (mrData.hasUserApproved && !mrData.isDraft) item.mrElement.classList.add("greened");
+      }, { isStale, onError });
+      return;
+    }
+
+    const mrListContainer = mergeRequestElementsArr[0].closest("ul");
+    if (!mrListContainer) {
+      console.error("Cannot find the merge requests list container element.");
+      return;
+    }
+    const kanbanBoard = createKanbanBoard(mrListContainer);
+    const columns = {
+      "To Review": kanbanBoard.querySelector('[data-column="To Review"] .kanban-column-body'),
+      Pending: kanbanBoard.querySelector('[data-column="Pending"] .kanban-column-body'),
+      Approved: kanbanBoard.querySelector('[data-column="Approved"] .kanban-column-body'),
+    };
+
+    if (g_boardLoading === "progressive") {
+      // Cards appear as soon as their batch arrives
+      await getMergeRequestsData(items, (item, mrData) => {
+        if (isStale()) return;
+        renderCard(columns, item, mrData);
+        addColumnCounts(columns);
+      }, { isStale, onError });
+      return;
+    }
+
+    // All at once: render from the cache right away if every MR is cached, then refresh in one go
+    const cached = new Map(items.map(item => [item, readListCache(item)]));
+    const hasFullCache = items.every(item => cached.get(item));
+    if (hasFullCache) renderBoard(columns, items, cached);
+    else showColumnsLoading(columns);
+
+    const fresh = new Map();
+    await getMergeRequestsData(items, (item, mrData) => fresh.set(item, mrData), { isStale, onError });
+    if (isStale()) return;
+
+    // Keep cached data for MRs whose refresh failed
+    items.forEach(item => { if (!fresh.get(item) && cached.get(item)) fresh.set(item, cached.get(item)); });
+    const changed = !hasFullCache || items.some(item => JSON.stringify(fresh.get(item)) !== JSON.stringify(cached.get(item)));
+    if (changed) renderBoard(columns, items, fresh);
   }
 
   // Add badges to MR card
@@ -284,26 +347,34 @@ async function mergeRequestsList() {
       nativeApprovalBadge.classList.add("gl-flex");
       nativeApprovalBadge.appendChild(approvalsBadge);
     }
-
-    // Merge blockers badges
-    const statusBadges = [];
-    if (mrData.hasConflicts) {
-      statusBadges.push(constructBadge("Conflicts", "Merge request has conflicts with the target branch", "badge-danger"));
-    } else if (mrData.needsRebase) {
-      statusBadges.push(constructBadge("Rebase needed", "Source branch must be rebased onto the target branch", "badge-warning"));
-    }
-    if (statusBadges.length > 0) {
-      const statusItem = document.createElement("li");
-      statusItem.classList.add("mr-status-badges");
-      statusBadges.forEach(badge => statusItem.appendChild(badge));
-      controlsContainer.prepend(statusItem);
-    }
   }
 
-  // Add banners (NEW COMMITS/COMMENTS) to MR card
-  function addBanners(mrElement, mrData) {
+  // Add banners to MR card: actions needed (CONFLICTS/NEEDS REBASE) and news since last visit
+  function addBanners(mrElement, mrData, { showSeenBanners }) {
     const infoContainer = mrElement.querySelector(".issuable-main-info");
     if (!infoContainer) return;
+
+    const banners = [];
+    if (mrData.hasConflicts) {
+      banners.push(constructActionBanner("CONFLICTS", "Resolve conflicts with the target branch before merging", "warning-solid"));
+    } else if (mrData.needsRebase) {
+      banners.push(constructActionBanner("NEEDS REBASE", "Rebase the source branch onto the target branch before merging", "branch"));
+    }
+
+    // Fields missing from the saved record mean "never seen": no banner instead of a false one
+    const saved = mrData.savedData;
+    if (showSeenBanners) {
+      if (saved.head_sha && mrData.headSha && saved.head_sha !== mrData.headSha) {
+        banners.push(constructBanner("NEW COMMITS", "New commits since last visit", "badge-tier"));
+      }
+      if (saved.replies_in_user_threads !== undefined && mrData.repliesInUserThreads > saved.replies_in_user_threads) {
+        banners.push(constructBanner("NEW REPLIES", "New replies to your threads since last visit", "badge-info"));
+      }
+      if (saved.other_comments !== undefined && mrData.otherComments > saved.other_comments) {
+        banners.push(constructBanner("NEW COMMENTS", "New comments since last visit", "badge-warning"));
+      }
+    }
+    if (banners.length === 0) return;
 
     let bannersContainer = infoContainer.querySelector(".kanban-banners");
     if (!bannersContainer) {
@@ -311,18 +382,7 @@ async function mergeRequestsList() {
       bannersContainer.classList.add("kanban-banners");
       infoContainer.insertBefore(bannersContainer, infoContainer.firstChild);
     }
-
-    // Fields missing from the saved record mean "never seen": no banner instead of a false one
-    const saved = mrData.savedData;
-    if (saved.head_sha && mrData.headSha && saved.head_sha !== mrData.headSha) {
-      bannersContainer.appendChild(constructBanner("NEW COMMITS", "New commits since last visit", "badge-tier"));
-    }
-    if (saved.replies_in_user_threads !== undefined && mrData.repliesInUserThreads > saved.replies_in_user_threads) {
-      bannersContainer.appendChild(constructBanner("NEW REPLIES", "New replies to your threads since last visit", "badge-info"));
-    }
-    if (saved.other_comments !== undefined && mrData.otherComments > saved.other_comments) {
-      bannersContainer.appendChild(constructBanner("NEW COMMENTS", "New comments since last visit", "badge-warning"));
-    }
+    banners.forEach(banner => bannersContainer.appendChild(banner));
   }
 
   // Badge factory
@@ -343,6 +403,14 @@ async function mergeRequestsList() {
     return badgeSpan;
   }
 
+  // Banner for something the author has to do: red, with an icon
+  function constructActionBanner(text, title, iconName) {
+    const banner = constructBanner(text, title, "badge-danger");
+    banner.classList.add("mrflow-banner-action");
+    prependIcon(banner, iconName);
+    return banner;
+  }
+
   // SVG icon factory (uses GitLab's sprite; its URL is hashed per deploy, so take it from the page)
   function prependIcon(target, iconName) {
     const spriteUrl = getIconSpriteUrl();
@@ -355,18 +423,29 @@ async function mergeRequestsList() {
     target.prepend(svg);
   }
 
-  // Move MR element to kanban column
-  function moveToColumn(mrElement, columnName, columns, index) {
-    const clonedElement = mrElement.cloneNode(true);
-    clonedElement.classList.add("mr-card");
-    clonedElement.classList.remove("!gl-flex");
-    clonedElement.style.order = index;
-
-    columns[columnName].appendChild(clonedElement);
-  }
-
   // Start processing
   processMergeRequests();
+}
+
+// Native GitLab alert above the list, e.g. when the API rate limit is hit
+function showApiError(anchor, error) {
+  if (!anchor || document.querySelector(".mrflow-alert")) return;
+  const minutes = error.retryAfter ? Math.ceil(error.retryAfter / 60) : null;
+  const message = error.status === 429
+    ? `MRFlow: GitLab API rate limit reached${minutes ? `, try again in ~${minutes} min` : ""}. Some badges are missing.`
+    : "MRFlow: could not load merge request details from GitLab. Some badges are missing.";
+
+  const alert = document.createElement("div");
+  alert.className = "mrflow-alert gl-alert gl-alert-warning gl-alert-not-dismissible gl-my-3";
+  const content = document.createElement("div");
+  content.className = "gl-alert-content";
+  const body = document.createElement("div");
+  body.className = "gl-alert-body";
+  body.textContent = message;
+  content.appendChild(body);
+  alert.appendChild(content);
+  const board = document.querySelector(".kanban-board");
+  (board || anchor).insertAdjacentElement("beforebegin", alert);
 }
 
 // == API Helpers ==
@@ -388,23 +467,60 @@ function releaseRequestSlot() {
   else g_activeRequests--;
 }
 
-// GET from the GitLab API with a concurrency limit and Retry-After handling for 429
-async function apiFetch(path) {
+class ApiError extends Error {
+  constructor(status, path, retryAfter) {
+    super(`GitLab API ${status}: ${path}`);
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+
+// Request the GitLab API with a concurrency limit. A 429 is retried only when GitLab asks
+// for a short wait; a long Retry-After (gitlab.com can answer with ~1 hour) fails fast.
+async function apiFetch(path, options = {}) {
   await acquireRequestSlot();
   try {
     for (let attempt = 0; ; attempt++) {
-      const response = await fetch(`${window.location.origin}/api/v4${path}`, { credentials: "same-origin" });
-      if (response.status === 429 && attempt < MAX_RETRIES) {
+      const response = await fetch(`${window.location.origin}${path}`, { credentials: "same-origin", ...options });
+      if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get("retry-after"), 10);
-        await sleep((Number.isFinite(retryAfter) ? retryAfter : 2 ** attempt) * 1000);
-        continue;
+        const waitS = Number.isFinite(retryAfter) ? retryAfter : 2 ** attempt;
+        if (attempt < MAX_RETRIES && waitS <= MAX_RETRY_AFTER_S) {
+          await sleep(waitS * 1000);
+          continue;
+        }
+        throw new ApiError(429, path, Number.isFinite(retryAfter) ? retryAfter : null);
       }
-      if (!response.ok) throw new Error(`GitLab API ${response.status}: ${path}`);
+      if (!response.ok) throw new ApiError(response.status, path);
       return response;
     }
   } finally {
     releaseRequestSlot();
   }
+}
+
+// Identical requests still in flight (e.g. from a run superseded by GitLab's redirect) are shared
+const g_inflightGraphql = new Map();
+
+// GraphQL with the session cookie: GitLab treats a POST without the CSRF token as anonymous
+function graphqlFetch(query, variables) {
+  const body = JSON.stringify({ query, variables });
+  if (g_inflightGraphql.has(body)) return g_inflightGraphql.get(body);
+
+  const request = (async () => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+    const response = await apiFetch("/api/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}) },
+      body,
+    });
+    const result = await response.json();
+    if (result.errors?.length && !result.data) throw new Error(`GitLab GraphQL: ${result.errors[0].message}`);
+    return result.data;
+  })();
+  g_inflightGraphql.set(body, request);
+  request.finally(() => g_inflightGraphql.delete(body)).catch(() => {});
+  return request;
 }
 
 // Get current user ID (cached for the tab session)
@@ -413,7 +529,7 @@ async function getCurrentUserId() {
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) return parseInt(cached, 10);
   try {
-    const userData = await (await apiFetch("/user")).json();
+    const userData = await (await apiFetch("/api/v4/user")).json();
     sessionStorage.setItem(cacheKey, String(userData.id));
     return userData.id;
   } catch {
@@ -421,8 +537,35 @@ async function getCurrentUserId() {
   }
 }
 
-// Fetch all discussions (paginated)
-async function fetchDiscussions(baseUrl) {
+const MERGE_REQUESTS_QUERY = `
+  query MRFlowMergeRequests($projectPath: ID!, $iids: [String!]) {
+    project(fullPath: $projectPath) {
+      mergeRequests(iids: $iids, first: 100) {
+        nodes {
+          iid
+          webUrl
+          draft
+          detailedMergeStatus
+          shouldBeRebased
+          conflicts
+          diffHeadSha
+          approvedBy { nodes { id } }
+          discussions(first: 100) {
+            pageInfo { hasNextPage }
+            nodes {
+              resolvable
+              resolved
+              notes(first: 100) { nodes { system author { id } } }
+            }
+          }
+        }
+      }
+    }
+  }`;
+
+// Fetch all discussions through REST (only for MRs with more than 100 discussions), in the GraphQL shape
+async function fetchAllDiscussions(projectPath, mrIid) {
+  const baseUrl = `/api/v4/projects/${encodeURIComponent(projectPath)}/merge_requests/${mrIid}`;
   let discussions = [];
   let nextPage = 1;
   while (nextPage) {
@@ -430,38 +573,41 @@ async function fetchDiscussions(baseUrl) {
     discussions = discussions.concat(await response.json());
     nextPage = response.headers.get("x-next-page");
   }
-  return discussions;
+  return discussions.map(discussion => ({
+    resolvable: !discussion.individual_note && discussion.notes.some(note => note.resolvable),
+    resolved: discussion.notes[0]?.resolved === true,
+    notes: { nodes: discussion.notes.map(note => ({ system: note.system, author: { id: note.author?.id } })) },
+  }));
 }
 
 // Summarize discussions and approvals relative to the current user
-function computeActivity(discussionsData, approvalsData) {
+function computeActivity(discussions, approvedByIds) {
   let totalThreads = 0, unresolvedThreads = 0, totalUserThreads = 0, unresolvedUserThreads = 0;
   let repliesInUserThreads = 0, otherComments = 0;
-  const isOtherUserNote = note => !note.system && note.author && note.author.id != g_currentUserId;
+  const isOtherUserNote = note => !note.system && parseUserId(note.author?.id) !== g_currentUserId;
 
-  discussionsData.forEach(discussion => {
-    const notes = discussion.notes;
-    if (!notes || notes.length === 0) return;
+  discussions.forEach(discussion => {
+    const notes = discussion.notes?.nodes || [];
+    if (notes.length === 0) return;
 
-    if (discussion.individual_note) {
+    // Plain comments and system notes
+    if (!discussion.resolvable) {
       otherComments += notes.filter(isOtherUserNote).length;
       return;
     }
 
-    const rootNote = notes[0];
-    const isUserThread = rootNote.author && rootNote.author.id == g_currentUserId;
+    const isUserThread = parseUserId(notes[0].author?.id) === g_currentUserId;
     totalThreads++;
-    if (!rootNote.resolved) unresolvedThreads++;
+    if (!discussion.resolved) unresolvedThreads++;
     if (isUserThread) {
       totalUserThreads++;
-      if (!rootNote.resolved) unresolvedUserThreads++;
+      if (!discussion.resolved) unresolvedUserThreads++;
       repliesInUserThreads += notes.filter(isOtherUserNote).length;
     } else {
       otherComments += notes.filter(isOtherUserNote).length;
     }
   });
 
-  const approvedBy = approvalsData.approved_by || [];
   return {
     totalThreads,
     unresolvedThreads,
@@ -469,38 +615,55 @@ function computeActivity(discussionsData, approvalsData) {
     unresolvedUserThreads,
     repliesInUserThreads,
     otherComments,
-    approvalsGiven: approvedBy.length,
-    hasUserApproved: approvedBy.some(user => user.user && user.user.id == g_currentUserId),
+    approvalsGiven: approvedByIds.length,
+    hasUserApproved: approvedByIds.includes(g_currentUserId),
   };
 }
 
-// Discussions + approvals for one MR, reused for a short time while the MR is unchanged
-async function getMergeRequestActivity(projectPath, mainData, { useCache }) {
-  const baseUrl = `/projects/${encodeURIComponent(projectPath)}/merge_requests/${mainData.iid}`;
-  const cacheKey = `mr-utils/activity/${g_currentUserId}/${projectPath}/${mainData.iid}`;
-  if (useCache) {
-    try {
-      const cached = JSON.parse(sessionStorage.getItem(cacheKey));
-      if (cached && cached.updatedAt === mainData.updated_at && Date.now() - cached.fetchedAt < ACTIVITY_CACHE_TTL_MS) {
-        return cached.activity;
-      }
-    } catch {}
-  }
+// Process GraphQL MR node for UI
+function processMRData(mr, discussions) {
+  const approvalsRequired = g_requiredApprovals;
+  const activity = computeActivity(discussions, (mr.approvedBy?.nodes || []).map(user => parseUserId(user.id)));
+  const status = mr.detailedMergeStatus;
 
-  const [discussionsData, approvalsData] = await Promise.all([
-    fetchDiscussions(baseUrl),
-    apiFetch(`${baseUrl}/approvals`).then(res => res.json()),
-  ]);
-  const activity = computeActivity(discussionsData, approvalsData);
-  try {
-    sessionStorage.setItem(cacheKey, JSON.stringify({ updatedAt: mainData.updated_at, fetchedAt: Date.now(), activity }));
-  } catch {}
-  return activity;
+  return {
+    ...activity,
+    approvalsRequired,
+    mrPath: mr.webUrl ? new URL(mr.webUrl).pathname : "",
+    isDraft: mr.draft,
+    isReady: status === "MERGEABLE" && activity.approvalsGiven >= approvalsRequired,
+    hasConflicts: mr.conflicts === true || status === "CONFLICT",
+    needsRebase: mr.shouldBeRebased === true || status === "NEED_REBASE",
+    headSha: mr.diffHeadSha,
+  };
 }
 
-// Fetch data for many MRs: one list request per project (up to 100 iids), then activity per MR.
-// onData(item, mrData) is called per item as soon as it is ready; mrData is null on failure.
-async function getMergeRequestsData(items, onData, { isStale = () => false, useCache = true } = {}) {
+// Last data shown for an MR, to fill the board instantly on the next visit
+function listCacheKey({ projectPath, mrIid }) {
+  return `mr-utils/list-cache/${g_currentUserId}/${projectPath}/${mrIid}`;
+}
+
+function readListCache(item) {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(listCacheKey(item)));
+    if (!cached || Date.now() - cached.fetchedAt > LIST_CACHE_TTL_MS) return null;
+    return { ...cached.data, savedData: readSavedData(cached.data.mrPath) };
+  } catch {
+    return null;
+  }
+}
+
+function writeListCache(item, mrData) {
+  try {
+    const { savedData, ...data } = mrData;
+    sessionStorage.setItem(listCacheKey(item), JSON.stringify({ fetchedAt: Date.now(), data }));
+  } catch {}
+}
+
+// Fetch data for many MRs with one GraphQL request per project and batch of GRAPHQL_BATCH_SIZE iids.
+// onData(item, mrData) is called per item once its batch is in; mrData is null on failure.
+// onError(error) is called once per failed batch.
+async function getMergeRequestsData(items, onData, { isStale = () => false, onError = () => {} } = {}) {
   const itemsByProject = new Map();
   items.forEach(item => {
     if (!itemsByProject.has(item.projectPath)) itemsByProject.set(item.projectPath, []);
@@ -509,26 +672,31 @@ async function getMergeRequestsData(items, onData, { isStale = () => false, useC
 
   const tasks = [];
   for (const [projectPath, projectItems] of itemsByProject) {
-    for (let i = 0; i < projectItems.length; i += 100) {
-      const chunk = projectItems.slice(i, i + 100);
-      const query = chunk.map(item => `iids[]=${item.mrIid}`).join("&");
+    for (let i = 0; i < projectItems.length; i += GRAPHQL_BATCH_SIZE) {
+      const batch = projectItems.slice(i, i + GRAPHQL_BATCH_SIZE);
       tasks.push((async () => {
-        let mainDataByIid = new Map();
+        let nodesByIid = new Map();
         try {
-          const list = await (await apiFetch(`/projects/${encodeURIComponent(projectPath)}/merge_requests?${query}&per_page=100`)).json();
-          mainDataByIid = new Map(list.map(mr => [String(mr.iid), mr]));
+          const data = await graphqlFetch(MERGE_REQUESTS_QUERY, { projectPath, iids: batch.map(item => String(item.mrIid)) });
+          nodesByIid = new Map((data?.project?.mergeRequests?.nodes || []).map(mr => [String(mr.iid), mr]));
         } catch (error) {
           console.error("MRFlow: failed to load merge requests", error);
+          onError(error);
         }
-        await Promise.all(chunk.map(async item => {
-          const mainData = mainDataByIid.get(String(item.mrIid));
+        await Promise.all(batch.map(async item => {
+          const mr = nodesByIid.get(String(item.mrIid));
           let mrData = null;
-          if (mainData && !isStale()) {
+          if (mr && !isStale()) {
             try {
-              const activity = await getMergeRequestActivity(projectPath, mainData, { useCache });
-              mrData = processMRData(mainData, activity);
+              const discussions = mr.discussions.pageInfo.hasNextPage
+                ? await fetchAllDiscussions(projectPath, item.mrIid)
+                : mr.discussions.nodes;
+              mrData = processMRData(mr, discussions);
+              writeListCache(item, mrData);
+              mrData.savedData = readSavedData(mrData.mrPath);
             } catch (error) {
-              console.error("MRFlow: failed to load merge request activity", error);
+              console.error("MRFlow: failed to load merge request discussions", error);
+              onError(error);
             }
           }
           onData(item, mrData);
@@ -542,25 +710,8 @@ async function getMergeRequestsData(items, onData, { isStale = () => false, useC
 // Fetch data for a single MR
 async function getMergeRequestData(projectPath, mrIid) {
   let result = null;
-  await getMergeRequestsData([{ projectPath, mrIid }], (_, mrData) => { result = mrData; }, { useCache: false });
+  await getMergeRequestsData([{ projectPath, mrIid }], (_, mrData) => { result = mrData; });
   return result;
-}
-
-// Process MR data for UI
-function processMRData(mainData, activity) {
-  const approvalsRequired = g_requiredApprovals;
-  const mrPath = mainData.web_url ? new URL(mainData.web_url).pathname : "";
-
-  return {
-    ...activity,
-    approvalsRequired,
-    isDraft: mainData.draft,
-    isReady: mainData.detailed_merge_status === 'mergeable' && activity.approvalsGiven >= approvalsRequired,
-    needsRebase: mainData.detailed_merge_status === 'need_rebase',
-    hasConflicts: mainData.has_conflicts === true || mainData.detailed_merge_status === 'conflict',
-    headSha: mainData.sha,
-    savedData: readSavedData(mrPath),
-  };
 }
 
 // GitLab's icon sprite URL, e.g. "/assets/icons-<hash>.svg"
