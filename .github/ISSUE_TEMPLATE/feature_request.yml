@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest an improvement
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or slow today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should MRFlow do? Remember that UI should look native to GitLab.

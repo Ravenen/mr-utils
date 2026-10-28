@@ -54,7 +54,9 @@ label {
     outline: none;
 }
 
-#kanbanView {
+#kanbanView,
+#animateCards,
+#resetChecksOnNewCommits {
     transform: scale(1.2);
 }
 

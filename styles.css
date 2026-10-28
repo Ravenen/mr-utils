@@ -29,6 +29,8 @@
 
 /* Column body */
 .kanban-column-body {
+    display: flex;
+    flex-direction: column;
     padding: 10px !important;
 }
 
@@ -47,7 +49,13 @@
     box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
     border-color: var(--gl-badge-success-text-color-default) !important;
 }
- */
+
+/* Card sliding to another column (see animateCardMoves) */
+.mr-card.mrflow-card-moving {
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 4px 12px var(--gl-shadow-color-default, rgba(5, 5, 6, 0.16));
+}
 
 /* Info container in MR card */
 .mr-card > .issuable-info-container {
@@ -74,6 +82,15 @@
     margin-right: 5px;
 }
 
+/* Banners that need an action from the author (CONFLICTS, NEEDS REBASE) */
+.mrflow-banner-action {
+    gap: 4px;
+}
+
+.mrflow-banner-action svg {
+    fill: currentColor;
+}
+
 /* Badge pill right spacing */
 span.badge-pill + span.badge-pill {
     border-top-left-radius: 2rem !important;
@@ -90,7 +107,14 @@ span.badge-pill:has(+ span.badge-pill) {
 
 /* Dimmed (draft) MR */
 .dimmed > div {
-    opacity: 0.1;
+    opacity: 0.3;
+    filter: grayscale(1);
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.dimmed:hover > div {
+    opacity: 1;
+    filter: none;
 }
 
 /* Approved MR highlight */
