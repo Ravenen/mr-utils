@@ -1,0 +1,50 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check syntax
+        run: node --check content_script.js && node --check popup.js
+
+      - name: Package
+        id: package
+        run: |
+          ./scripts/package.sh
+          echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Lint for Firefox (web-ext)
+        run: npx --yes web-ext@8 lint --source-dir dist/extension
+
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}
+          path: dist/extension/
+          if-no-files-found: error
+
+      - name: Install instructions
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
+          ### MRFlow ${{ steps.package.outputs.version }} (${{ steps.package.outputs.sha }})
+
+          [Download the build](${{ steps.upload.outputs.artifact-url }}) and unzip it.
+
+          - **Chrome**: open \`chrome://extensions\`, turn on *Developer mode*, click *Load unpacked* and pick the unzipped folder.
+          - **Firefox**: open \`about:debugging#/runtime/this-firefox\`, click *Load Temporary Add-on…* and pick \`manifest.json\` in the unzipped folder.
+
+          Disable the store version of MRFlow while testing, otherwise both run on the page.
+          SUMMARY
