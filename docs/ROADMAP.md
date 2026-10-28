@@ -286,30 +286,31 @@ interface ChecklistItem {
 - [x] CONFLICTS / NEEDS REBASE як банери дії (червоні, з іконкою), у всіх колонках і в звичайному списку
 - [x] CI: збірка і артефакт для локального тестування на кожен PR, `web-ext lint`
 - [x] README, CLAUDE.md, issue templates
-- [ ] LICENSE (потрібен вибір ліцензії)
-- [ ] Скріншоти в README
+- [ ] LICENSE (потрібен вибір ліцензії) — #19
+- [ ] Скріншоти в README — #20
 
-### Milestone 2.0: переписування
-- [ ] WXT + TS + lint + Vitest + CI
-- [ ] Роутер і життєвий цикл фіч
-- [ ] GraphQL-клієнт, кеш, обмежувач
-- [ ] `dom.ts`, нативні UI-компоненти
-- [ ] Kanban через CSS Grid над нативним списком
-- [ ] Схема налаштувань + міграція, options page
-- [ ] Release workflow + публікація в CWS і AMO
+### Milestone 2.0: переписування — епік #2
+- [ ] WXT + TS + lint + Vitest + CI — #7
+- [ ] Роутер і життєвий цикл фіч — #3
+- [ ] GraphQL-клієнт, кеш, обмежувач — #4
+- [ ] `dom.ts`, нативні UI-компоненти — #5
+- [ ] Kanban через CSS Grid над нативним списком — #6
+- [ ] Схема налаштувань + міграція, options page — #8
+- [ ] Release workflow + публікація в CWS і AMO — #9
+- [ ] E2E-тести на фікстурах — #10
 
-### Milestone 2.1: approval guard
-- [ ] Редактор чеклістів, умовні правила, `resetOn`
-- [ ] Рівні підтвердження (checklist / confirm / comment / typed) для Approve і Merge
-- [ ] Командний конфіг `.gitlab/mrflow.json`
+### Milestone 2.1: approval guard — епік #11
+- [ ] Редактор чеклістів, умовні правила, `resetOn` — #13
+- [ ] Рівні підтвердження (checklist / confirm / comment / typed) для Approve і Merge — #14
+- [ ] Командний конфіг `.gitlab/mrflow.json` — #15
 
-### Milestone 2.2: hunk review
-- [ ] Прототип на поточному diffs DOM і на Rapid Diffs
-- [ ] Хешування hunk, збереження, прогрес, синхронізація з нативним «Viewed»
-- [ ] Навігація до наступного непереглянутого
+### Milestone 2.2: hunk review — епік #12
+- [ ] Прототип на поточному diffs DOM і на Rapid Diffs — #16
+- [ ] Хешування hunk, збереження, прогрес, синхронізація з нативним «Viewed» — #17
+- [ ] Навігація до наступного непереглянутого — #18
 
 ### Далі
-- Self-hosted GitLab, i18n, колонки «Мої / Чекають мене», stale та pipeline бейджі.
+- Колонки «Мої / Чекають мене» — #21; pipeline, stale і «відстає на N» бейджі — #22; self-hosted GitLab — #23; синхронізація «переглянуто» — #24; i18n — #25.
 
 ---
 
