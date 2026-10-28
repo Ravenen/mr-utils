@@ -11,11 +11,14 @@ let g_listRunId = 0;
 
 const MR_PAGE_RE = /merge_requests\/\d+/;
 const STORAGE_SUFFIX = "/mr-utils";
-const MAX_CONCURRENT_REQUESTS = 4;
+const MAX_CONCURRENT_REQUESTS = 6;
 const MAX_RETRIES = 3;
 const MAX_RETRY_AFTER_S = 10;
 const MERGE_REQUESTS_BATCH_SIZE = 50;
-const DISCUSSIONS_BATCH_SIZE = 5;
+const COLD_NOTES_BATCH_SIZE = 5;
+const NOTES_BATCH_MAX_MRS = 10;
+const NOTES_BATCH_MAX_COMMENTS = 150;
+const UPDATE_WAVE_MS = 1500;
 const STORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const WAIT_TIMEOUT_MS = 30 * 1000;
 
@@ -535,7 +538,7 @@ async function getCurrentUserId() {
   }
 }
 
-// Stage 2: everything except discussions. Cheap, so batches are large.
+// Stage 2: everything except comments. Cheap, so batches are large.
 const MERGE_REQUESTS_QUERY = `
   query MRFlowMergeRequests($projectPath: ID!, $iids: [String!]) {
     project(fullPath: $projectPath) {
@@ -558,65 +561,74 @@ const MERGE_REQUESTS_QUERY = `
     }
   }`;
 
-// Stage 3: discussions, only for MRs whose comments changed. Heavy, so batches are small.
-const MERGE_REQUESTS_DISCUSSIONS_QUERY = `
-  query MRFlowMergeRequestsDiscussions($projectPath: ID!, $iids: [String!]) {
+// Stage 3: comments only (no system notes, which can be most of an MR's discussions), oldest first,
+// each with its discussion. GitLab batch-loads the discussions per MR.
+const NOTES_FIELDS = `
+  pageInfo { hasNextPage endCursor }
+  nodes { author { id } discussion { id resolvable resolved } }`;
+
+const MERGE_REQUESTS_NOTES_QUERY = `
+  query MRFlowMergeRequestsNotes($projectPath: ID!, $iids: [String!]) {
     project(fullPath: $projectPath) {
       mergeRequests(iids: $iids, first: 100) {
         nodes {
           iid
-          discussions(first: 100) {
-            pageInfo { hasNextPage }
-            nodes {
-              resolvable
-              resolved
-              notes(first: 100) { nodes { system author { id } } }
-            }
-          }
+          notes(filter: ONLY_COMMENTS, first: 100) { ${NOTES_FIELDS} }
         }
       }
     }
   }`;
 
-// Fetch all discussions through REST (only for MRs with more than 100 discussions), in the GraphQL shape
-async function fetchAllDiscussions(projectPath, mrIid) {
-  const baseUrl = `/api/v4/projects/${encodeURIComponent(projectPath)}/merge_requests/${mrIid}`;
-  let discussions = [];
-  let nextPage = 1;
-  while (nextPage) {
-    const response = await apiFetch(`${baseUrl}/discussions?per_page=100&page=${nextPage}`);
-    discussions = discussions.concat(await response.json());
-    nextPage = response.headers.get("x-next-page");
+const MERGE_REQUEST_NOTES_PAGE_QUERY = `
+  query MRFlowMergeRequestNotesPage($projectPath: ID!, $iid: String!, $after: String) {
+    project(fullPath: $projectPath) {
+      mergeRequest(iid: $iid) {
+        notes(filter: ONLY_COMMENTS, first: 100, after: $after) { ${NOTES_FIELDS} }
+      }
+    }
+  }`;
+
+// All comments of an MR, following pagination from the first page
+async function fetchAllNotes(projectPath, mrIid, firstPage) {
+  const notes = [...firstPage.nodes];
+  let pageInfo = firstPage.pageInfo;
+  while (pageInfo.hasNextPage) {
+    const data = await graphqlFetch(MERGE_REQUEST_NOTES_PAGE_QUERY, { projectPath, iid: String(mrIid), after: pageInfo.endCursor });
+    const page = data?.project?.mergeRequest?.notes;
+    if (!page) break;
+    notes.push(...page.nodes);
+    pageInfo = page.pageInfo;
   }
-  return discussions.map(discussion => ({
-    resolvable: !discussion.individual_note && discussion.notes.some(note => note.resolvable),
-    resolved: discussion.notes[0]?.resolved === true,
-    notes: { nodes: discussion.notes.map(note => ({ system: note.system, author: { id: note.author?.id } })) },
-  }));
+  return notes;
 }
 
-// Summarize discussions relative to the current user
-function computeActivity(discussions) {
+// Summarize comments relative to the current user. Notes come oldest first, so the first note
+// seen for a discussion is the one that started it.
+function computeActivity(notes) {
   let totalUserThreads = 0, unresolvedUserThreads = 0, repliesInUserThreads = 0, otherComments = 0;
-  const isOtherUserNote = note => !note.system && parseUserId(note.author?.id) !== g_currentUserId;
+  const threadStartedByUser = new Map();
 
-  discussions.forEach(discussion => {
-    const notes = discussion.notes?.nodes || [];
-    if (notes.length === 0) return;
+  notes.forEach(note => {
+    const discussion = note.discussion;
+    const isOtherUserNote = parseUserId(note.author?.id) !== g_currentUserId;
 
-    // Plain comments and system notes
-    if (!discussion.resolvable) {
-      otherComments += notes.filter(isOtherUserNote).length;
+    // Plain comments
+    if (!discussion?.resolvable) {
+      if (isOtherUserNote) otherComments++;
       return;
     }
 
-    if (parseUserId(notes[0].author?.id) === g_currentUserId) {
-      totalUserThreads++;
-      if (!discussion.resolved) unresolvedUserThreads++;
-      repliesInUserThreads += notes.filter(isOtherUserNote).length;
-    } else {
-      otherComments += notes.filter(isOtherUserNote).length;
+    if (!threadStartedByUser.has(discussion.id)) {
+      const isUserThread = !isOtherUserNote;
+      threadStartedByUser.set(discussion.id, isUserThread);
+      if (isUserThread) {
+        totalUserThreads++;
+        if (!discussion.resolved) unresolvedUserThreads++;
+      }
     }
+    if (!isOtherUserNote) return;
+    if (threadStartedByUser.get(discussion.id)) repliesInUserThreads++;
+    else otherComments++;
   });
 
   return { totalUserThreads, unresolvedUserThreads, repliesInUserThreads, otherComments };
@@ -624,7 +636,7 @@ function computeActivity(discussions) {
 
 const EMPTY_ACTIVITY = { totalUserThreads: 0, unresolvedUserThreads: 0, repliesInUserThreads: 0, otherComments: 0 };
 
-// Discussions only need refetching when one of these changes. updatedAt alone is not enough:
+// Comments only need refetching when one of these changes. updatedAt alone is not enough:
 // GitLab throttles touching the MR when notes change.
 function getActivityKey(mr) {
   return [mr.updatedAt, mr.userNotesCount, mr.resolvableDiscussionsCount, mr.resolvedDiscussionsCount].join("|");
@@ -655,7 +667,7 @@ function processMRData(mr, activity) {
 }
 
 // What was last shown for an MR: lays out the board before the API answers, and lets
-// discussions be skipped while they are unchanged. Kept in localStorage, pruned after STORE_MAX_AGE_MS.
+// comments be skipped while they are unchanged. Kept in localStorage, pruned after STORE_MAX_AGE_MS.
 function storeKey({ projectPath, mrIid }) {
   return `mr-utils/mr/${g_currentUserId}/${projectPath}/${mrIid}`;
 }
@@ -687,20 +699,30 @@ function pruneStoredMergeRequests() {
   }
 }
 
-// Run fn(projectPath, batchItems) for every project and batch of `size` items
-function forEachBatch(items, size, fn) {
+// Split items into per-project batches of at most maxItems items and, when weightOf is given,
+// at most maxWeight total weight (an item heavier than maxWeight gets a batch of its own)
+function makeBatches(items, { maxItems, maxWeight = Infinity, weightOf = () => 0 }) {
   const itemsByProject = new Map();
   items.forEach(item => {
     if (!itemsByProject.has(item.projectPath)) itemsByProject.set(item.projectPath, []);
     itemsByProject.get(item.projectPath).push(item);
   });
-  const tasks = [];
+  const batches = [];
   for (const [projectPath, projectItems] of itemsByProject) {
-    for (let i = 0; i < projectItems.length; i += size) {
-      tasks.push(fn(projectPath, projectItems.slice(i, i + size)));
+    let batch = [], weight = 0;
+    for (const item of projectItems) {
+      const itemWeight = weightOf(item);
+      if (batch.length > 0 && (batch.length >= maxItems || weight + itemWeight > maxWeight)) {
+        batches.push({ projectPath, batch });
+        batch = [];
+        weight = 0;
+      }
+      batch.push(item);
+      weight += itemWeight;
     }
+    if (batch.length > 0) batches.push({ projectPath, batch });
   }
-  return Promise.all(tasks);
+  return batches;
 }
 
 async function fetchNodes(query, projectPath, batch) {
@@ -708,72 +730,104 @@ async function fetchNodes(query, projectPath, batch) {
   return new Map((data?.project?.mergeRequests?.nodes || []).map(mr => [String(mr.iid), mr]));
 }
 
-// Load MR details in two stages:
+// Activity for every MR of a batch whose comments came back
+async function fetchActivities(projectPath, batch) {
+  const nodesByIid = await fetchNodes(MERGE_REQUESTS_NOTES_QUERY, projectPath, batch);
+  return Promise.all(batch.filter(item => nodesByIid.has(String(item.mrIid))).map(async item => {
+    const notes = await fetchAllNotes(projectPath, item.mrIid, nodesByIid.get(String(item.mrIid)).notes);
+    return [item, computeActivity(notes)];
+  }));
+}
+
+// Load MR details:
 //   2. one cheap query per MERGE_REQUESTS_BATCH_SIZE MRs (approvals, status, thread counts);
-//   3. discussions per DISCUSSIONS_BATCH_SIZE MRs, only for MRs whose comments changed since stored.
-// onUpdate([[item, mrData], ...]) is called per batch when progressive, otherwise once per stage.
+//   3. comments, only for MRs whose comments changed since stored. For MRs never seen before this
+//      starts right away, in parallel with stage 2; otherwise after it, batched by comment count.
+// onUpdate([[item, mrData], ...]) gets the updates as they come when progressive; otherwise they are
+// grouped: when stage 2 is done, then UPDATE_WAVE_MS later, then when everything is done.
 // MRs that fail to load are simply not updated; onError(error) is called per failed batch.
 async function loadMergeRequestsData(items, { onUpdate, onError = () => {}, isStale = () => false, progressive = false }) {
   pruneStoredMergeRequests();
-  const stored = new Map(items.map(item => [item, readStoredMergeRequest(item)]));
-  const nodes = new Map();
+  const state = new Map(items.map(item => [item, { record: readStoredMergeRequest(item), mr: null, activity: null }]));
 
-  const runStage = async (stageItems, batchSize, loadBatch) => {
-    const stageUpdates = [];
-    await forEachBatch(stageItems, batchSize, async (projectPath, batch) => {
-      if (isStale()) return;
-      let updates = [];
-      try {
-        updates = await loadBatch(projectPath, batch);
-      } catch (error) {
-        console.error("MRFlow: failed to load merge requests", error);
-        onError(error);
-      }
-      if (isStale() || updates.length === 0) return;
-      if (progressive) onUpdate(updates);
-      else stageUpdates.push(...updates);
-    });
-    if (!isStale() && stageUpdates.length > 0) onUpdate(stageUpdates);
+  let pending = new Map();
+  const flush = () => {
+    if (isStale() || pending.size === 0) return;
+    const updates = [...pending];
+    pending = new Map();
+    onUpdate(updates);
   };
+  const update = item => {
+    const s = state.get(item);
+    if (!s.mr || isStale()) return;
+    const fallbackActivity = s.mr.userNotesCount === 0 ? EMPTY_ACTIVITY : s.record?.activity;
+    pending.set(item, processMRData(s.mr, s.activity || fallbackActivity));
+    if (progressive) flush();
+  };
+  const store = item => {
+    const s = state.get(item);
+    if (s.mr && s.activity) writeStoredMergeRequest(item, { mrData: processMRData(s.mr, s.activity), activity: s.activity, activityKey: getActivityKey(s.mr) });
+  };
+  const onActivity = ([item, activity]) => {
+    state.get(item).activity = activity;
+    store(item);
+    update(item);
+  };
+  const run = async (batches, load) => Promise.all(batches.map(async ({ projectPath, batch }) => {
+    if (isStale()) return;
+    try {
+      await load(projectPath, batch);
+    } catch (error) {
+      console.error("MRFlow: failed to load merge requests", error);
+      onError(error);
+    }
+  }));
+  const loadActivities = (projectPath, batch) => fetchActivities(projectPath, batch).then(results => results.forEach(onActivity));
 
-  // Stage 2
-  await runStage(items, MERGE_REQUESTS_BATCH_SIZE, async (projectPath, batch) => {
+  // Stage 2. Started first so that its requests are ahead of stage 3 in the request queue.
+  const stage2 = run(makeBatches(items, { maxItems: MERGE_REQUESTS_BATCH_SIZE }), async (projectPath, batch) => {
     const nodesByIid = await fetchNodes(MERGE_REQUESTS_QUERY, projectPath, batch);
-    return batch.filter(item => nodesByIid.has(String(item.mrIid))).map(item => {
+    batch.forEach(item => {
       const mr = nodesByIid.get(String(item.mrIid));
-      const record = stored.get(item);
-      const activityKey = getActivityKey(mr);
-      // No comments at all: nothing to fetch in stage 3
-      const activity = mr.userNotesCount === 0 ? EMPTY_ACTIVITY : record?.activity;
-      const isActivityFresh = mr.userNotesCount === 0 || record?.activityKey === activityKey;
-      nodes.set(item, { mr, activityKey, needsDiscussions: !isActivityFresh });
-      const mrData = processMRData(mr, activity);
-      if (isActivityFresh) writeStoredMergeRequest(item, { mrData, activity, activityKey });
-      return [item, mrData];
+      if (!mr) return;
+      const s = state.get(item);
+      s.mr = mr;
+      // Stored activity is still exact when the comments did not change
+      if (!s.activity && (mr.userNotesCount === 0 || s.record?.activityKey === getActivityKey(mr))) {
+        s.activity = mr.userNotesCount === 0 ? EMPTY_ACTIVITY : s.record.activity;
+      }
+      store(item);
+      update(item);
     });
   });
 
-  // Stage 3
-  const needDiscussions = items.filter(item => nodes.get(item)?.needsDiscussions);
-  if (needDiscussions.length === 0 || isStale()) return;
-  const runDiscussions = async (projectPath, batch) => {
-    const nodesByIid = await fetchNodes(MERGE_REQUESTS_DISCUSSIONS_QUERY, projectPath, batch);
-    return Promise.all(batch.filter(item => nodesByIid.has(String(item.mrIid))).map(async item => {
-      const discussionsNode = nodesByIid.get(String(item.mrIid)).discussions;
-      const discussions = discussionsNode.pageInfo.hasNextPage
-        ? await fetchAllDiscussions(projectPath, item.mrIid)
-        : discussionsNode.nodes;
-      const { mr, activityKey } = nodes.get(item);
-      const activity = computeActivity(discussions);
-      const mrData = processMRData(mr, activity);
-      writeStoredMergeRequest(item, { mrData, activity, activityKey });
-      return [item, mrData];
-    }));
-  };
-  await runStage(needDiscussions, DISCUSSIONS_BATCH_SIZE, runDiscussions);
+  // Stage 3 for MRs never seen before: nothing to compare against, so no need to wait for stage 2
+  const coldItems = items.filter(item => !state.get(item).record?.activity);
+  const coldStage = run(makeBatches(coldItems, { maxItems: COLD_NOTES_BATCH_SIZE }), loadActivities);
+
+  await stage2;
+  flush();
+  if (isStale()) return;
+
+  // Stage 3 for MRs seen before whose comments changed, heavy MRs in batches of their own
+  const changedItems = items.filter(item => {
+    const s = state.get(item);
+    return s.mr && !s.activity && s.record?.activity;
+  });
+  const waveTimer = progressive ? null : setTimeout(flush, UPDATE_WAVE_MS);
+  await Promise.all([
+    coldStage,
+    run(makeBatches(changedItems, {
+      maxItems: NOTES_BATCH_MAX_MRS,
+      maxWeight: NOTES_BATCH_MAX_COMMENTS,
+      weightOf: item => state.get(item).mr.userNotesCount || 0,
+    }), loadActivities),
+  ]);
+  clearTimeout(waveTimer);
+  flush();
 }
 
-// Fetch fresh data for a single MR (both stages, no shortcuts) and remember it for the list; null on failure
+// Fetch fresh data for a single MR (no shortcuts) and remember it for the list; null on failure
 async function getMergeRequestData(projectPath, mrIid) {
   try {
     return await fetchMergeRequestData(projectPath, mrIid);
@@ -785,14 +839,13 @@ async function getMergeRequestData(projectPath, mrIid) {
 
 async function fetchMergeRequestData(projectPath, mrIid) {
   const item = { projectPath, mrIid };
-  const nodesByIid = await fetchNodes(MERGE_REQUESTS_QUERY, projectPath, [item]);
+  const [nodesByIid, activities] = await Promise.all([
+    fetchNodes(MERGE_REQUESTS_QUERY, projectPath, [item]),
+    fetchActivities(projectPath, [item]),
+  ]);
   const mr = nodesByIid.get(String(mrIid));
   if (!mr) return null;
-  const discussionsNode = (await fetchNodes(MERGE_REQUESTS_DISCUSSIONS_QUERY, projectPath, [item])).get(String(mrIid))?.discussions;
-  const discussions = !discussionsNode ? [] : discussionsNode.pageInfo.hasNextPage
-    ? await fetchAllDiscussions(projectPath, mrIid)
-    : discussionsNode.nodes;
-  const activity = computeActivity(discussions);
+  const activity = activities[0]?.[1] || EMPTY_ACTIVITY;
   const mrData = processMRData(mr, activity);
   writeStoredMergeRequest(item, { mrData, activity, activityKey: getActivityKey(mr) });
   return mrData;
