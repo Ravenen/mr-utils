@@ -3,6 +3,7 @@
 let g_requiredApprovals;
 let g_isKanbanView;
 let g_boardLoading;
+let g_animateCards;
 let g_resetChecksOnNewCommits;
 let g_currentUserId;
 let g_currentBoard = null;
@@ -74,10 +75,11 @@ function parseUserId(id) {
 // Initialize global settings and user ID
 async function initData() {
   const browserApi = getBrowserApi();
-  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView", "boardLoading", "resetChecksOnNewCommits"]);
+  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView", "boardLoading", "animateCards", "resetChecksOnNewCommits"]);
   g_requiredApprovals = parseInt(res.approvalsNeeded, 10) || 3;
   g_isKanbanView = res.kanbanView !== undefined ? res.kanbanView : true;
   g_boardLoading = res.boardLoading === "progressive" ? "progressive" : "all";
+  g_animateCards = res.animateCards !== undefined ? res.animateCards : true;
   g_resetChecksOnNewCommits = res.resetChecksOnNewCommits !== undefined ? res.resetChecksOnNewCommits : true;
 
   const parsedUrl = new URL(window.location.href);
@@ -233,7 +235,7 @@ async function mergeRequestsList() {
   function animateCardMoves(applyChange) {
     const before = new Map([...cards].map(([item, card]) => [item, { rect: card.getBoundingClientRect(), column: card.parentElement }]));
     applyChange();
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!g_animateCards || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     cards.forEach((card, item) => {
       const from = before.get(item);
