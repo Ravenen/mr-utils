@@ -14,8 +14,9 @@ const STORAGE_SUFFIX = "/mr-utils";
 const MAX_CONCURRENT_REQUESTS = 4;
 const MAX_RETRIES = 3;
 const MAX_RETRY_AFTER_S = 10;
-const GRAPHQL_BATCH_SIZE = 20;
-const LIST_CACHE_TTL_MS = 10 * 60 * 1000;
+const MERGE_REQUESTS_BATCH_SIZE = 50;
+const DISCUSSIONS_BATCH_SIZE = 5;
+const STORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const WAIT_TIMEOUT_MS = 30 * 1000;
 
 // Helper: Get browser API (cross-browser)
@@ -175,13 +176,16 @@ async function mergeRequestsList() {
     });
   }
 
-  // Native GitLab spinner shown in every column until the board is filled
-  function showColumnsLoading(columns) {
+  // Small native GitLab spinner in the column headers while details are still loading
+  function setColumnsLoading(columns, isLoading) {
     Object.values(columns).forEach(column => {
-      const spinner = document.createElement("li");
-      spinner.className = "mrflow-loading gl-flex gl-justify-center gl-p-5";
-      spinner.innerHTML = '<span class="gl-spinner gl-spinner-md gl-spinner-dark" aria-label="Loading"></span>';
-      column.appendChild(spinner);
+      const header = column.parentElement.querySelector(".kanban-column-header");
+      header.querySelector(".mrflow-loading")?.remove();
+      if (!isLoading) return;
+      const spinner = document.createElement("span");
+      spinner.className = "mrflow-loading gl-spinner gl-spinner-sm gl-spinner-dark gl-ml-2 gl-align-middle";
+      spinner.setAttribute("aria-label", "Loading");
+      header.appendChild(spinner);
     });
   }
 
@@ -199,12 +203,14 @@ async function mergeRequestsList() {
     if (mrData.isReady) mrElement.classList.add("mr-ready");
   }
 
-  // Put a decorated clone of the native item into its column; order inside a column is kept via CSS `order`
-  function renderCard(columns, { index, mrElement }, mrData) {
-    const card = mrElement.cloneNode(true);
+  // Put a decorated clone of the native item into its column, replacing the item's previous card.
+  // Order inside a column is kept via CSS `order`.
+  const cards = new Map();
+  function renderCard(columns, item, mrData) {
+    const card = item.mrElement.cloneNode(true);
     card.classList.add("mr-card");
     card.classList.remove("!gl-flex");
-    card.style.order = index;
+    card.style.order = item.index;
     // Remove all classes except 'issuable-meta' to fix styling issues
     const metaEl = card.getElementsByClassName("issuable-meta")?.[0];
     if (metaEl) {
@@ -212,14 +218,9 @@ async function mergeRequestsList() {
     }
     const columnName = getColumnName(mrData);
     if (mrData) decorateMergeRequest(card, mrData, { showSeenBanners: columnName !== "To Review" });
+    cards.get(item)?.remove();
+    cards.set(item, card);
     columns[columnName].appendChild(card);
-  }
-
-  // (Re)build all cards at once
-  function renderBoard(columns, items, dataByItem) {
-    Object.values(columns).forEach(column => column.replaceChildren());
-    items.forEach(item => renderCard(columns, item, dataByItem.get(item)));
-    addColumnCounts(columns);
   }
 
   // Main: Process all MRs on the page
@@ -249,13 +250,18 @@ async function mergeRequestsList() {
       if (!isStale()) showApiError(mergeRequestElementsArr[0].closest("ul"), error);
     };
 
-    // Native list view: decorate the native items once fresh data is in
+    // Native list view: decorate the native items once all details are in
     if (!g_isKanbanView) {
-      await getMergeRequestsData(items, (item, mrData) => {
-        if (isStale() || !mrData) return;
+      const dataByItem = new Map();
+      await loadMergeRequestsData(items, {
+        isStale, onError,
+        onUpdate: updates => updates.forEach(([item, mrData]) => dataByItem.set(item, mrData)),
+      });
+      if (isStale()) return;
+      dataByItem.forEach((mrData, item) => {
         decorateMergeRequest(item.mrElement, mrData, { showSeenBanners: false });
         if (mrData.hasUserApproved && !mrData.isDraft) item.mrElement.classList.add("greened");
-      }, { isStale, onError });
+      });
       return;
     }
 
@@ -271,30 +277,22 @@ async function mergeRequestsList() {
       Approved: kanbanBoard.querySelector('[data-column="Approved"] .kanban-column-body'),
     };
 
-    if (g_boardLoading === "progressive") {
-      // Cards appear as soon as their batch arrives
-      await getMergeRequestsData(items, (item, mrData) => {
+    // Stage 1: lay the board out right away from what was last seen for each MR (if anything)
+    items.forEach(item => renderCard(columns, item, readStoredMergeRequest(item)?.mrData || null));
+    addColumnCounts(columns);
+    setColumnsLoading(columns, true);
+
+    // Stages 2 and 3: details from the API; updates come per batch or, by default, once per stage
+    await loadMergeRequestsData(items, {
+      isStale, onError,
+      progressive: g_boardLoading === "progressive",
+      onUpdate: updates => {
         if (isStale()) return;
-        renderCard(columns, item, mrData);
+        updates.forEach(([item, mrData]) => renderCard(columns, item, mrData));
         addColumnCounts(columns);
-      }, { isStale, onError });
-      return;
-    }
-
-    // All at once: render from the cache right away if every MR is cached, then refresh in one go
-    const cached = new Map(items.map(item => [item, readListCache(item)]));
-    const hasFullCache = items.every(item => cached.get(item));
-    if (hasFullCache) renderBoard(columns, items, cached);
-    else showColumnsLoading(columns);
-
-    const fresh = new Map();
-    await getMergeRequestsData(items, (item, mrData) => fresh.set(item, mrData), { isStale, onError });
-    if (isStale()) return;
-
-    // Keep cached data for MRs whose refresh failed
-    items.forEach(item => { if (!fresh.get(item) && cached.get(item)) fresh.set(item, cached.get(item)); });
-    const changed = !hasFullCache || items.some(item => JSON.stringify(fresh.get(item)) !== JSON.stringify(cached.get(item)));
-    if (changed) renderBoard(columns, items, fresh);
+      },
+    });
+    if (!isStale()) setColumnsLoading(columns, false);
   }
 
   // Add badges to MR card
@@ -362,7 +360,7 @@ async function mergeRequestsList() {
     }
 
     // Fields missing from the saved record mean "never seen": no banner instead of a false one
-    const saved = mrData.savedData;
+    const saved = readSavedData(mrData.mrPath);
     if (showSeenBanners) {
       if (saved.head_sha && mrData.headSha && saved.head_sha !== mrData.headSha) {
         banners.push(constructBanner("NEW COMMITS", "New commits since last visit", "badge-tier"));
@@ -537,6 +535,7 @@ async function getCurrentUserId() {
   }
 }
 
+// Stage 2: everything except discussions. Cheap, so batches are large.
 const MERGE_REQUESTS_QUERY = `
   query MRFlowMergeRequests($projectPath: ID!, $iids: [String!]) {
     project(fullPath: $projectPath) {
@@ -545,11 +544,27 @@ const MERGE_REQUESTS_QUERY = `
           iid
           webUrl
           draft
+          updatedAt
           detailedMergeStatus
           shouldBeRebased
           conflicts
           diffHeadSha
+          userNotesCount
+          resolvableDiscussionsCount
+          resolvedDiscussionsCount
           approvedBy { nodes { id } }
+        }
+      }
+    }
+  }`;
+
+// Stage 3: discussions, only for MRs whose comments changed. Heavy, so batches are small.
+const MERGE_REQUESTS_DISCUSSIONS_QUERY = `
+  query MRFlowMergeRequestsDiscussions($projectPath: ID!, $iids: [String!]) {
+    project(fullPath: $projectPath) {
+      mergeRequests(iids: $iids, first: 100) {
+        nodes {
+          iid
           discussions(first: 100) {
             pageInfo { hasNextPage }
             nodes {
@@ -580,10 +595,9 @@ async function fetchAllDiscussions(projectPath, mrIid) {
   }));
 }
 
-// Summarize discussions and approvals relative to the current user
-function computeActivity(discussions, approvedByIds) {
-  let totalThreads = 0, unresolvedThreads = 0, totalUserThreads = 0, unresolvedUserThreads = 0;
-  let repliesInUserThreads = 0, otherComments = 0;
+// Summarize discussions relative to the current user
+function computeActivity(discussions) {
+  let totalUserThreads = 0, unresolvedUserThreads = 0, repliesInUserThreads = 0, otherComments = 0;
   const isOtherUserNote = note => !note.system && parseUserId(note.author?.id) !== g_currentUserId;
 
   discussions.forEach(discussion => {
@@ -596,10 +610,7 @@ function computeActivity(discussions, approvedByIds) {
       return;
     }
 
-    const isUserThread = parseUserId(notes[0].author?.id) === g_currentUserId;
-    totalThreads++;
-    if (!discussion.resolved) unresolvedThreads++;
-    if (isUserThread) {
+    if (parseUserId(notes[0].author?.id) === g_currentUserId) {
       totalUserThreads++;
       if (!discussion.resolved) unresolvedUserThreads++;
       repliesInUserThreads += notes.filter(isOtherUserNote).length;
@@ -608,110 +619,183 @@ function computeActivity(discussions, approvedByIds) {
     }
   });
 
-  return {
-    totalThreads,
-    unresolvedThreads,
-    totalUserThreads,
-    unresolvedUserThreads,
-    repliesInUserThreads,
-    otherComments,
-    approvalsGiven: approvedByIds.length,
-    hasUserApproved: approvedByIds.includes(g_currentUserId),
-  };
+  return { totalUserThreads, unresolvedUserThreads, repliesInUserThreads, otherComments };
 }
 
-// Process GraphQL MR node for UI
-function processMRData(mr, discussions) {
+const EMPTY_ACTIVITY = { totalUserThreads: 0, unresolvedUserThreads: 0, repliesInUserThreads: 0, otherComments: 0 };
+
+// Discussions only need refetching when one of these changes. updatedAt alone is not enough:
+// GitLab throttles touching the MR when notes change.
+function getActivityKey(mr) {
+  return [mr.updatedAt, mr.userNotesCount, mr.resolvableDiscussionsCount, mr.resolvedDiscussionsCount].join("|");
+}
+
+// Combine a stage 2 node with (possibly not yet refreshed) per-user activity for UI
+function processMRData(mr, activity) {
   const approvalsRequired = g_requiredApprovals;
-  const activity = computeActivity(discussions, (mr.approvedBy?.nodes || []).map(user => parseUserId(user.id)));
+  const approvedByIds = (mr.approvedBy?.nodes || []).map(user => parseUserId(user.id));
+  const approvalsGiven = approvedByIds.length;
   const status = mr.detailedMergeStatus;
+  const totalThreads = mr.resolvableDiscussionsCount || 0;
 
   return {
-    ...activity,
+    ...(activity || EMPTY_ACTIVITY),
+    totalThreads,
+    unresolvedThreads: totalThreads - (mr.resolvedDiscussionsCount || 0),
+    approvalsGiven,
     approvalsRequired,
+    hasUserApproved: approvedByIds.includes(g_currentUserId),
     mrPath: mr.webUrl ? new URL(mr.webUrl).pathname : "",
     isDraft: mr.draft,
-    isReady: status === "MERGEABLE" && activity.approvalsGiven >= approvalsRequired,
+    isReady: status === "MERGEABLE" && approvalsGiven >= approvalsRequired,
     hasConflicts: mr.conflicts === true || status === "CONFLICT",
     needsRebase: mr.shouldBeRebased === true || status === "NEED_REBASE",
     headSha: mr.diffHeadSha,
   };
 }
 
-// Last data shown for an MR, to fill the board instantly on the next visit
-function listCacheKey({ projectPath, mrIid }) {
-  return `mr-utils/list-cache/${g_currentUserId}/${projectPath}/${mrIid}`;
+// What was last shown for an MR: lays out the board before the API answers, and lets
+// discussions be skipped while they are unchanged. Kept in localStorage, pruned after STORE_MAX_AGE_MS.
+function storeKey({ projectPath, mrIid }) {
+  return `mr-utils/mr/${g_currentUserId}/${projectPath}/${mrIid}`;
 }
 
-function readListCache(item) {
+function readStoredMergeRequest(item) {
   try {
-    const cached = JSON.parse(sessionStorage.getItem(listCacheKey(item)));
-    if (!cached || Date.now() - cached.fetchedAt > LIST_CACHE_TTL_MS) return null;
-    return { ...cached.data, savedData: readSavedData(cached.data.mrPath) };
+    return JSON.parse(localStorage.getItem(storeKey(item)));
   } catch {
     return null;
   }
 }
 
-function writeListCache(item, mrData) {
+function writeStoredMergeRequest(item, record) {
   try {
-    const { savedData, ...data } = mrData;
-    sessionStorage.setItem(listCacheKey(item), JSON.stringify({ fetchedAt: Date.now(), data }));
+    localStorage.setItem(storeKey(item), JSON.stringify({ ...record, storedAt: Date.now() }));
   } catch {}
 }
 
-// Fetch data for many MRs with one GraphQL request per project and batch of GRAPHQL_BATCH_SIZE iids.
-// onData(item, mrData) is called per item once its batch is in; mrData is null on failure.
-// onError(error) is called once per failed batch.
-async function getMergeRequestsData(items, onData, { isStale = () => false, onError = () => {} } = {}) {
+function pruneStoredMergeRequests() {
+  const now = Date.now();
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith("mr-utils/mr/")) continue;
+    try {
+      if (now - (JSON.parse(localStorage.getItem(key))?.storedAt || 0) > STORE_MAX_AGE_MS) localStorage.removeItem(key);
+    } catch {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+// Run fn(projectPath, batchItems) for every project and batch of `size` items
+function forEachBatch(items, size, fn) {
   const itemsByProject = new Map();
   items.forEach(item => {
     if (!itemsByProject.has(item.projectPath)) itemsByProject.set(item.projectPath, []);
     itemsByProject.get(item.projectPath).push(item);
   });
-
   const tasks = [];
   for (const [projectPath, projectItems] of itemsByProject) {
-    for (let i = 0; i < projectItems.length; i += GRAPHQL_BATCH_SIZE) {
-      const batch = projectItems.slice(i, i + GRAPHQL_BATCH_SIZE);
-      tasks.push((async () => {
-        let nodesByIid = new Map();
-        try {
-          const data = await graphqlFetch(MERGE_REQUESTS_QUERY, { projectPath, iids: batch.map(item => String(item.mrIid)) });
-          nodesByIid = new Map((data?.project?.mergeRequests?.nodes || []).map(mr => [String(mr.iid), mr]));
-        } catch (error) {
-          console.error("MRFlow: failed to load merge requests", error);
-          onError(error);
-        }
-        await Promise.all(batch.map(async item => {
-          const mr = nodesByIid.get(String(item.mrIid));
-          let mrData = null;
-          if (mr && !isStale()) {
-            try {
-              const discussions = mr.discussions.pageInfo.hasNextPage
-                ? await fetchAllDiscussions(projectPath, item.mrIid)
-                : mr.discussions.nodes;
-              mrData = processMRData(mr, discussions);
-              writeListCache(item, mrData);
-              mrData.savedData = readSavedData(mrData.mrPath);
-            } catch (error) {
-              console.error("MRFlow: failed to load merge request discussions", error);
-              onError(error);
-            }
-          }
-          onData(item, mrData);
-        }));
-      })());
+    for (let i = 0; i < projectItems.length; i += size) {
+      tasks.push(fn(projectPath, projectItems.slice(i, i + size)));
     }
   }
-  await Promise.all(tasks);
+  return Promise.all(tasks);
 }
 
-// Fetch data for a single MR
+async function fetchNodes(query, projectPath, batch) {
+  const data = await graphqlFetch(query, { projectPath, iids: batch.map(item => String(item.mrIid)) });
+  return new Map((data?.project?.mergeRequests?.nodes || []).map(mr => [String(mr.iid), mr]));
+}
+
+// Load MR details in two stages:
+//   2. one cheap query per MERGE_REQUESTS_BATCH_SIZE MRs (approvals, status, thread counts);
+//   3. discussions per DISCUSSIONS_BATCH_SIZE MRs, only for MRs whose comments changed since stored.
+// onUpdate([[item, mrData], ...]) is called per batch when progressive, otherwise once per stage.
+// MRs that fail to load are simply not updated; onError(error) is called per failed batch.
+async function loadMergeRequestsData(items, { onUpdate, onError = () => {}, isStale = () => false, progressive = false }) {
+  pruneStoredMergeRequests();
+  const stored = new Map(items.map(item => [item, readStoredMergeRequest(item)]));
+  const nodes = new Map();
+
+  const runStage = async (stageItems, batchSize, loadBatch) => {
+    const stageUpdates = [];
+    await forEachBatch(stageItems, batchSize, async (projectPath, batch) => {
+      if (isStale()) return;
+      let updates = [];
+      try {
+        updates = await loadBatch(projectPath, batch);
+      } catch (error) {
+        console.error("MRFlow: failed to load merge requests", error);
+        onError(error);
+      }
+      if (isStale() || updates.length === 0) return;
+      if (progressive) onUpdate(updates);
+      else stageUpdates.push(...updates);
+    });
+    if (!isStale() && stageUpdates.length > 0) onUpdate(stageUpdates);
+  };
+
+  // Stage 2
+  await runStage(items, MERGE_REQUESTS_BATCH_SIZE, async (projectPath, batch) => {
+    const nodesByIid = await fetchNodes(MERGE_REQUESTS_QUERY, projectPath, batch);
+    return batch.filter(item => nodesByIid.has(String(item.mrIid))).map(item => {
+      const mr = nodesByIid.get(String(item.mrIid));
+      const record = stored.get(item);
+      const activityKey = getActivityKey(mr);
+      // No comments at all: nothing to fetch in stage 3
+      const activity = mr.userNotesCount === 0 ? EMPTY_ACTIVITY : record?.activity;
+      const isActivityFresh = mr.userNotesCount === 0 || record?.activityKey === activityKey;
+      nodes.set(item, { mr, activityKey, needsDiscussions: !isActivityFresh });
+      const mrData = processMRData(mr, activity);
+      if (isActivityFresh) writeStoredMergeRequest(item, { mrData, activity, activityKey });
+      return [item, mrData];
+    });
+  });
+
+  // Stage 3
+  const needDiscussions = items.filter(item => nodes.get(item)?.needsDiscussions);
+  if (needDiscussions.length === 0 || isStale()) return;
+  const runDiscussions = async (projectPath, batch) => {
+    const nodesByIid = await fetchNodes(MERGE_REQUESTS_DISCUSSIONS_QUERY, projectPath, batch);
+    return Promise.all(batch.filter(item => nodesByIid.has(String(item.mrIid))).map(async item => {
+      const discussionsNode = nodesByIid.get(String(item.mrIid)).discussions;
+      const discussions = discussionsNode.pageInfo.hasNextPage
+        ? await fetchAllDiscussions(projectPath, item.mrIid)
+        : discussionsNode.nodes;
+      const { mr, activityKey } = nodes.get(item);
+      const activity = computeActivity(discussions);
+      const mrData = processMRData(mr, activity);
+      writeStoredMergeRequest(item, { mrData, activity, activityKey });
+      return [item, mrData];
+    }));
+  };
+  await runStage(needDiscussions, DISCUSSIONS_BATCH_SIZE, runDiscussions);
+}
+
+// Fetch fresh data for a single MR (both stages, no shortcuts) and remember it for the list; null on failure
 async function getMergeRequestData(projectPath, mrIid) {
-  let result = null;
-  await getMergeRequestsData([{ projectPath, mrIid }], (_, mrData) => { result = mrData; });
-  return result;
+  try {
+    return await fetchMergeRequestData(projectPath, mrIid);
+  } catch (error) {
+    console.error("MRFlow: failed to load the merge request", error);
+    return null;
+  }
+}
+
+async function fetchMergeRequestData(projectPath, mrIid) {
+  const item = { projectPath, mrIid };
+  const nodesByIid = await fetchNodes(MERGE_REQUESTS_QUERY, projectPath, [item]);
+  const mr = nodesByIid.get(String(mrIid));
+  if (!mr) return null;
+  const discussionsNode = (await fetchNodes(MERGE_REQUESTS_DISCUSSIONS_QUERY, projectPath, [item])).get(String(mrIid))?.discussions;
+  const discussions = !discussionsNode ? [] : discussionsNode.pageInfo.hasNextPage
+    ? await fetchAllDiscussions(projectPath, mrIid)
+    : discussionsNode.nodes;
+  const activity = computeActivity(discussions);
+  const mrData = processMRData(mr, activity);
+  writeStoredMergeRequest(item, { mrData, activity, activityKey: getActivityKey(mr) });
+  return mrData;
 }
 
 // GitLab's icon sprite URL, e.g. "/assets/icons-<hash>.svg"
