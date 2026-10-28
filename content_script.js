@@ -19,6 +19,8 @@ const COLD_NOTES_BATCH_SIZE = 5;
 const NOTES_BATCH_MAX_MRS = 10;
 const NOTES_BATCH_MAX_COMMENTS = 150;
 const UPDATE_WAVE_MS = 1500;
+const CARD_MOVE_MS = 400;
+const CARD_SHIFT_MS = 250;
 const STORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const WAIT_TIMEOUT_MS = 30 * 1000;
 
@@ -226,6 +228,32 @@ async function mergeRequestsList() {
     columns[columnName].appendChild(card);
   }
 
+  // FLIP: remember where every card is, apply the change, then slide each moved card from its old place.
+  // Covers cards changing columns and the cards that shift to fill the gap.
+  function animateCardMoves(applyChange) {
+    const before = new Map([...cards].map(([item, card]) => [item, { rect: card.getBoundingClientRect(), column: card.parentElement }]));
+    applyChange();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    cards.forEach((card, item) => {
+      const from = before.get(item);
+      if (!from) return;
+      const to = card.getBoundingClientRect();
+      const dx = from.rect.left - to.left;
+      const dy = from.rect.top - to.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+
+      // Cards changing columns travel above the others
+      const changesColumn = from.column !== card.parentElement;
+      if (changesColumn) card.classList.add("mrflow-card-moving");
+      const animation = card.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+        { duration: changesColumn ? CARD_MOVE_MS : CARD_SHIFT_MS, easing: "cubic-bezier(0.2, 0, 0, 1)" }
+      );
+      animation.onfinish = animation.oncancel = () => card.classList.remove("mrflow-card-moving");
+    });
+  }
+
   // Main: Process all MRs on the page
   async function processMergeRequests() {
     // Wait for MR elements to appear (an empty list never gets any, hence the timeout)
@@ -291,8 +319,10 @@ async function mergeRequestsList() {
       progressive: g_boardLoading === "progressive",
       onUpdate: updates => {
         if (isStale()) return;
-        updates.forEach(([item, mrData]) => renderCard(columns, item, mrData));
-        addColumnCounts(columns);
+        animateCardMoves(() => {
+          updates.forEach(([item, mrData]) => renderCard(columns, item, mrData));
+          addColumnCounts(columns);
+        });
       },
     });
     if (!isStale()) setColumnsLoading(columns, false);
