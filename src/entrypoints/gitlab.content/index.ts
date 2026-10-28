@@ -1,5 +1,8 @@
 import "./style.css";
-import { startContentScript } from "@/legacy/content-script";
+import { getCurrentUserId, gitlabApi } from "@/core/gitlab/api";
+import { startFeatures } from "@/core/lifecycle";
+import { loadSettings } from "@/core/settings";
+import { features } from "@/features";
 
 export default defineContentScript({
   matches: [
@@ -9,7 +12,7 @@ export default defineContentScript({
   ],
   runAt: "document_end",
   cssInjectionMode: "manifest",
-  main() {
-    startContentScript();
+  main(ctx) {
+    startFeatures(features, { api: gitlabApi, loadSettings, getCurrentUserId }, ctx.signal);
   },
 });

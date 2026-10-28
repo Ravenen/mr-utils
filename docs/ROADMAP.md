@@ -294,8 +294,8 @@ interface ChecklistItem {
 - [ ] Скріншоти в README — #20
 
 ### Milestone 2.0: переписування — епік #2
-- [ ] WXT + TS + lint + Vitest + CI — #7
-- [ ] Роутер і життєвий цикл фіч — #3
+- [x] WXT + TS + lint + Vitest + CI — #7
+- [x] Роутер і життєвий цикл фіч — #3
 - [ ] GraphQL-клієнт, кеш, обмежувач — #4
 - [ ] `dom.ts`, нативні UI-компоненти — #5
 - [ ] Kanban через CSS Grid над нативним списком — #6
