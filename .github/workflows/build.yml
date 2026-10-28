@@ -12,28 +12,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
+          cache: pnpm
 
-      - name: Check syntax
-        run: node --check content_script.js && node --check popup.js
+      - run: pnpm install --frozen-lockfile
 
-      - name: Package
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Build and zip
         id: package
         run: |
-          ./scripts/package.sh
-          echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
+          pnpm zip
+          pnpm zip:firefox
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Lint for Firefox (web-ext)
-        run: npx --yes web-ext@8 lint --source-dir dist/extension
+        run: pnpm exec web-ext lint --source-dir .output/firefox-mv3
+
+      - name: Check that the AMO sources zip rebuilds the Firefox build
+        run: ./scripts/verify-sources.sh
 
       - uses: actions/upload-artifact@v4
-        id: upload
+        id: upload-chrome
         with:
-          name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}
-          path: dist/extension/
+          name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}-chrome
+          path: .output/chrome-mv3/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        id: upload-firefox
+        with:
+          name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}-firefox
+          path: .output/firefox-mv3/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        id: upload-sources
+        with:
+          name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}-amo-sources
+          path: .output/mrflow-${{ steps.package.outputs.version }}-sources.zip
           if-no-files-found: error
 
       - name: Install instructions
@@ -41,10 +65,12 @@ jobs:
           cat >> "$GITHUB_STEP_SUMMARY" <<SUMMARY
           ### MRFlow ${{ steps.package.outputs.version }} (${{ steps.package.outputs.sha }})
 
-          [Download the build](${{ steps.upload.outputs.artifact-url }}) and unzip it.
+          Download the build for your browser and unzip it.
 
-          - **Chrome**: open \`chrome://extensions\`, turn on *Developer mode*, click *Load unpacked* and pick the unzipped folder.
-          - **Firefox**: open \`about:debugging#/runtime/this-firefox\`, click *Load Temporary Add-on…* and pick \`manifest.json\` in the unzipped folder.
+          - **Chrome** ([download](${{ steps.upload-chrome.outputs.artifact-url }})): open \`chrome://extensions\`, turn on *Developer mode*, click *Load unpacked* and pick the unzipped folder.
+          - **Firefox** ([download](${{ steps.upload-firefox.outputs.artifact-url }})): open \`about:debugging#/runtime/this-firefox\`, click *Load Temporary Add-on…* and pick \`manifest.json\` in the unzipped folder.
 
           Disable the store version of MRFlow while testing, otherwise both run on the page.
+
+          [AMO sources zip](${{ steps.upload-sources.outputs.artifact-url }}): what to upload to addons.mozilla.org next to the Firefox build (already checked to rebuild it byte for byte).
           SUMMARY
