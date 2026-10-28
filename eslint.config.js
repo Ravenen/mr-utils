@@ -13,7 +13,7 @@ export default tseslint.config(
   },
   {
     // Ported from 1.x as is; tightened while it is split into features
-    files: ["src/legacy/**", "src/entrypoints/popup/main.js"],
+    files: ["src/entrypoints/popup/main.js"],
     rules: {
       "no-empty": "off",
       "@typescript-eslint/no-unused-vars": "off",
