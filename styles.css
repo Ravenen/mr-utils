@@ -29,6 +29,8 @@
 
 /* Column body */
 .kanban-column-body {
+    display: flex;
+    flex-direction: column;
     padding: 10px !important;
 }
 
@@ -47,7 +49,6 @@
     box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
     border-color: var(--gl-badge-success-text-color-default) !important;
 }
- */
 
 /* Info container in MR card */
 .mr-card > .issuable-info-container {
@@ -62,6 +63,12 @@
 /* Badges container */
 .kanban-badges {
     display: flex;
+}
+
+/* Rebase/conflicts badges */
+.mr-status-badges {
+    display: flex;
+    gap: 4px;
 }
 
 /* Banners container */
@@ -90,7 +97,7 @@ span.badge-pill:has(+ span.badge-pill) {
 
 /* Dimmed (draft) MR */
 .dimmed > div {
-    opacity: 0.1;
+    opacity: 0.5;
 }
 
 /* Approved MR highlight */

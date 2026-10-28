@@ -1,26 +1,31 @@
 const browserApi = typeof browser !== "undefined" ? browser : chrome;
 
-document.getElementById("saveSettings").addEventListener("click", () => {
-  let approvalsNeeded = parseInt(document.getElementById("approvalsNeeded").value, 10);
-  let kanbanView = document.getElementById("kanbanView").checked;
+function showMessage(id) {
+  const message = document.getElementById(id);
+  message.classList.add("show");
+  setTimeout(() => message.classList.remove("show"), 3000);
+}
 
-  browserApi.storage.sync.set({ approvalsNeeded, kanbanView }).then(
-    () => {
-      const alertMessage = document.getElementById("alertMessage");
-      alertMessage.classList.add("show");
-      setTimeout(() => alertMessage.classList.remove("show"), 3000);
-    },
-    () => {
-      const errorMessage = document.getElementById("errorMessage");
-      errorMessage.classList.add("show", "error-message");
-      setTimeout(() => errorMessage.classList.remove("show"), 3000);
-    }
+document.getElementById("saveSettings").addEventListener("click", () => {
+  const approvalsNeeded = parseInt(document.getElementById("approvalsNeeded").value, 10);
+  const kanbanView = document.getElementById("kanbanView").checked;
+  const resetChecksOnNewCommits = document.getElementById("resetChecksOnNewCommits").checked;
+
+  if (!Number.isInteger(approvalsNeeded) || approvalsNeeded < 1) {
+    showMessage("errorMessage");
+    return;
+  }
+
+  browserApi.storage.sync.set({ approvalsNeeded, kanbanView, resetChecksOnNewCommits }).then(
+    () => showMessage("alertMessage"),
+    () => showMessage("errorMessage")
   );
 });
 
 // Load settings on popup open
 window.addEventListener("DOMContentLoaded", async () => {
-  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView"]);
+  const res = await browserApi.storage.sync.get(["approvalsNeeded", "kanbanView", "resetChecksOnNewCommits"]);
   document.getElementById("approvalsNeeded").value = parseInt(res.approvalsNeeded, 10) || 3;
   document.getElementById("kanbanView").checked = res.kanbanView !== undefined ? res.kanbanView : true;
+  document.getElementById("resetChecksOnNewCommits").checked = res.resetChecksOnNewCommits !== undefined ? res.resetChecksOnNewCommits : true;
 });

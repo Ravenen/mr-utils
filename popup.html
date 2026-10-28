@@ -17,9 +17,13 @@
         <label for="kanbanView">Enable Kanban Board</label>
         <input type="checkbox" id="kanbanView" />
       </div>
+      <div class="setting">
+        <label for="resetChecksOnNewCommits">Reset approval checks on new commits</label>
+        <input type="checkbox" id="resetChecksOnNewCommits" />
+      </div>
       <button id="saveSettings" class="save-button">Save</button>
       <div id="alertMessage" class="alert-message success">Settings saved successfully!</div>
-      <div id="errorMessage" class="alert-message error">Error: Settings could not be saved.</div>
+      <div id="errorMessage" class="alert-message error">Error: settings could not be saved. Approvals needed must be 1 or more.</div>
     </div>
     <script src="popup.js"></script>
   </body>
