@@ -2,127 +2,129 @@
 
 /* Board layout */
 .kanban-board {
-    display: flex;
-    gap: 16px;
-    margin-top: 16px;
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
 }
 
 /* Kanban columns */
 .kanban-column {
-    flex: 1;
-    border-style: solid;
-    border-radius: .25rem;
-    border-width: 1px;
-    border-color: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
-    background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
+  flex: 1;
+  border-style: solid;
+  border-radius: 0.25rem;
+  border-width: 1px;
+  border-color: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
+  background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
 }
 
 /* Column header */
 .kanban-column-header {
-    padding: 10px;
-    background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
-    color: var(--gl-text-color);
-    font-weight: bold;
-    text-align: center;
-    border-radius: .25rem .25rem 0 0;
+  padding: 10px;
+  background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
+  color: var(--gl-text-color);
+  font-weight: bold;
+  text-align: center;
+  border-radius: 0.25rem 0.25rem 0 0;
 }
 
 /* Column body */
 .kanban-column-body {
-    display: flex;
-    flex-direction: column;
-    padding: 10px !important;
+  display: flex;
+  flex-direction: column;
+  padding: 10px !important;
 }
 
 /* MR card styling */
 .mr-card {
-    display: block !important;
-    margin-bottom: 10px !important;
-    border-style: solid !important;
-    border-radius: .5rem !important;
-    border-width: 1px !important;
-    border-color: var(--gl-border-color-default) !important;
-    background-color: var(--gl-background-color-default) !important;
+  display: block !important;
+  margin-bottom: 10px !important;
+  border-style: solid !important;
+  border-radius: 0.5rem !important;
+  border-width: 1px !important;
+  border-color: var(--gl-border-color-default) !important;
+  background-color: var(--gl-background-color-default) !important;
 }
 
 .mr-ready {
-    box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
-    border-color: var(--gl-badge-success-text-color-default) !important;
+  box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
+  border-color: var(--gl-badge-success-text-color-default) !important;
 }
 
 /* Card sliding to another column (see animateCardMoves) */
 .mr-card.mrflow-card-moving {
-    position: relative;
-    z-index: 2;
-    box-shadow: 0 4px 12px var(--gl-shadow-color-default, rgba(5, 5, 6, 0.16));
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 12px var(--gl-shadow-color-default, rgba(5, 5, 6, 0.16));
 }
 
 /* Info container in MR card */
 .mr-card > .issuable-info-container {
-    display: block !important;
+  display: block !important;
 }
 
 /* Controls margin */
 .mr-card > div > div > ul.controls {
-    margin-top: 20px;
+  margin-top: 20px;
 }
 
 /* Badges container */
 .kanban-badges {
-    display: flex;
+  display: flex;
 }
 
 /* Banners container */
 .kanban-banners {
-    margin: 5px 0px;
+  margin: 5px 0px;
 }
 
 /* Banner badge spacing */
 .kanban-banners > .badge {
-    margin-right: 5px;
+  margin-right: 5px;
 }
 
 /* Banners that need an action from the author (CONFLICTS, NEEDS REBASE) */
 .mrflow-banner-action {
-    gap: 4px;
+  gap: 4px;
 }
 
 .mrflow-banner-action svg {
-    fill: currentColor;
+  fill: currentColor;
 }
 
 /* Badge pill right spacing */
 span.badge-pill + span.badge-pill {
-    border-top-left-radius: 2rem !important;
-    border-bottom-left-radius: 2rem !important;
-    margin-left: 2px !important;
+  border-top-left-radius: 2rem !important;
+  border-bottom-left-radius: 2rem !important;
+  margin-left: 2px !important;
 }
 
 /* Badge pill left spacing */
 span.badge-pill:has(+ span.badge-pill) {
-    border-top-right-radius: 2rem !important;
-    border-bottom-right-radius: 2rem !important;
-    margin-left: 2px !important;
+  border-top-right-radius: 2rem !important;
+  border-bottom-right-radius: 2rem !important;
+  margin-left: 2px !important;
 }
 
 /* Dimmed (draft) MR */
 .dimmed > div {
-    opacity: 0.3;
-    filter: grayscale(1);
-    transition: opacity 0.15s ease, filter 0.15s ease;
+  opacity: 0.3;
+  filter: grayscale(1);
+  transition:
+    opacity 0.15s ease,
+    filter 0.15s ease;
 }
 
 .dimmed:hover > div {
-    opacity: 1;
-    filter: none;
+  opacity: 1;
+  filter: none;
 }
 
 /* Approved MR highlight */
 .greened {
-    background-color: rgba(0, 149, 0, 0.1) !important;
+  background-color: rgba(0, 149, 0, 0.1) !important;
 }
 
 /* Column count */
 .kanban-count {
-    color: var(--gl-text-color-subtle);
+  color: var(--gl-text-color-subtle);
 }

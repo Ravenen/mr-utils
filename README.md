@@ -27,7 +27,7 @@ Browser extension that makes GitLab merge requests easier to review. Works on gi
 
 Every pull request is built by CI.
 
-1. Open the PR → **Checks** → **Build** → **Summary** and download the `mrflow-<version>-<sha>` artifact.
+1. Open the PR → **Checks** → **Build** → **Summary** and download the `mrflow-<version>-<sha>-chrome` or `-firefox` artifact.
 2. Unzip it.
 3. Load it:
    - **Chrome**: `chrome://extensions` → enable *Developer mode* → *Load unpacked* → pick the unzipped folder.
@@ -50,12 +50,33 @@ MRFlow reads data only from the GitLab API of the page you are on, using your ex
 
 ## Development
 
-No build step yet: the repository root is the unpacked extension.
+Built with [WXT](https://wxt.dev) and TypeScript. Requires Node.js 22+ and pnpm 10 (`corepack enable` picks the version from `package.json`).
 
 ```bash
-./scripts/package.sh                                      # dist/extension + dist/mrflow-<version>.zip
-npx web-ext lint --source-dir dist/extension              # Firefox validation
-npx web-ext run --source-dir dist/extension               # run in a temporary Firefox profile
+pnpm install
+pnpm dev                      # Chrome with hot reload (pnpm dev:firefox for Firefox)
+pnpm lint && pnpm typecheck && pnpm test
+pnpm build                    # .output/chrome-mv3 (pnpm build:firefox -> .output/firefox-mv3)
+pnpm zip                      # .output/mrflow-<version>-chrome.zip
+pnpm zip:firefox              # .output/mrflow-<version>-firefox.zip + .output/mrflow-<version>-sources.zip
+./scripts/verify-sources.sh   # rebuilds the Firefox build from the sources zip and compares
 ```
+
+### Publishing to addons.mozilla.org
+
+The code is bundled, so AMO asks for the source code. On *Submit a New Version* answer **Yes** to "Do You Need to Submit Source Code?", upload `mrflow-<version>-firefox.zip` as the add-on and `mrflow-<version>-sources.zip` as the source code. Both must come from the same `pnpm zip:firefox` run (CI uploads both as artifacts). The reviewer builds it with the steps below.
+
+## Building from source
+
+These steps rebuild the Firefox add-on from the sources zip exactly (CI checks this on every PR with `scripts/verify-sources.sh`).
+
+Environment: Linux or macOS (CI uses Ubuntu); [Node.js](https://nodejs.org) 22 or newer; pnpm 10.28.0 (`npm install -g pnpm@10.28.0`, or `corepack enable`).
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build:firefox
+```
+
+The add-on is in `.output/firefox-mv3`. The output is not minified. Third-party code in it comes only from [WXT](https://wxt.dev) (the `browser` API shim and `defineContentScript`); everything else is in `src/`.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the plan.

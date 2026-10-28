@@ -241,6 +241,10 @@ interface ChecklistItem {
 
 1. `pnpm build` → `.output/chrome-mv3`, `.output/firefox-mv3` (через WXT).
 2. `pnpm zip` → архіви для CWS і AMO, плюс **sources zip** для AMO (обов'язковий, якщо код бандлиться або мініфікується).
+   - На AMO у *Submit a New Version* на питання «Do You Need to Submit Source Code?» відповідаємо **Yes** і завантажуємо `mrflow-<version>-sources.zip` з того самого запуску `pnpm zip:firefox`, що й сам аддон. Без цього версію можуть відхилити.
+   - Рев'юер має відтворити збірку: інструкція в README («Building from source»), pnpm зафіксований через `packageManager`, `pnpm-lock.yaml` у репозиторії, `pnpm install --frozen-lockfile && pnpm build:firefox`.
+   - Збірка відтворювана побайтово: вихід не мініфікується (легше рецензувати), абсолютні шляхи прибираються з бандла. CI на кожен PR розпаковує sources zip в іншу теку, збирає й порівнює з `.output/firefox-mv3` (`scripts/verify-sources.sh`).
+   - `wxt submit` у release workflow передає sources zip через `--firefox-sources-zip`.
 3. **GitHub Actions**:
    - `ci.yml`: lint, typecheck, unit, build на кожен PR;
    - `release.yml`: на тег `v*` — збірка, zip, GitHub Release, `wxt submit` у Chrome Web Store і AMO (секрети: CWS client id/secret/refresh token, AMO JWT issuer/secret).
