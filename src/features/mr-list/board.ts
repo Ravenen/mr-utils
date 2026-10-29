@@ -65,6 +65,14 @@ export function createBoard(list: HTMLElement): Board {
         );
   const tracked = new WeakSet<HTMLElement>();
 
+  // The column bodies are drawn by the header cells (style.css): they need the list's height
+  const heightRule = spanStyle.sheet?.cssRules[spanStyle.sheet.insertRule(".mrflow-board-header {}")] as
+    CSSStyleRule | undefined;
+  const setListHeight = () => heightRule?.style.setProperty("--mrflow-list-height", `${list.offsetHeight}px`);
+  setListHeight();
+  const listObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(setListHeight);
+  listObserver?.observe(list);
+
   return {
     header,
     place(item, column) {
@@ -91,6 +99,7 @@ export function createBoard(list: HTMLElement): Board {
     },
     destroy() {
       resizeObserver?.disconnect();
+      listObserver?.disconnect();
       header.remove();
       spanStyle.remove();
       delete list.dataset.mrflowBoard;

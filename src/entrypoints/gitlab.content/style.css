@@ -5,11 +5,11 @@
 .mrflow-board-header,
 ul[data-mrflow-board] {
   --mrflow-gap: 16px;
-  --mrflow-column: calc((100% - 2 * var(--mrflow-gap)) / 3);
-  --mrflow-column-background: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
 }
 
+/* The header and the list are grids with the same tracks, so the columns line up to the pixel */
 .mrflow-board-header {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: var(--mrflow-gap);
@@ -18,12 +18,27 @@ ul[data-mrflow-board] {
 
 /* No border: the column body below has none either, so both are exactly as wide */
 .mrflow-column-header {
+  position: relative;
   padding: 10px;
   border-radius: 0.25rem 0.25rem 0 0;
   background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
   color: var(--gl-text-color-heading, var(--gl-text-color));
   font-weight: bold;
   text-align: center;
+}
+
+/* The column body: drawn by the header cell down the list's height (--mrflow-list-height, set in board.ts),
+   behind the list, which is positioned so that it paints on top */
+.mrflow-column-header::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: var(--mrflow-list-height, 0);
+  border-radius: 0 0 0.25rem 0.25rem;
+  background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
+  pointer-events: none;
 }
 
 .mrflow-column-count {
@@ -33,23 +48,16 @@ ul[data-mrflow-board] {
 /* Each column stacks its items: rows are 4px and an item spans as many as its height needs
    (data-mrflow-span, rules generated in board.ts); dense placement fills every column from the top */
 ul[data-mrflow-board] {
+  position: relative;
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: 4px;
   grid-auto-flow: row dense;
   column-gap: var(--mrflow-gap);
+  margin-top: 0 !important;
   padding: 10px 0 !important;
   border: 0 !important;
-  background-image: linear-gradient(
-    to right,
-    var(--mrflow-column-background) 0 var(--mrflow-column),
-    transparent var(--mrflow-column) calc(var(--mrflow-column) + var(--mrflow-gap)),
-    var(--mrflow-column-background) calc(var(--mrflow-column) + var(--mrflow-gap))
-      calc(2 * var(--mrflow-column) + var(--mrflow-gap)),
-    transparent calc(2 * var(--mrflow-column) + var(--mrflow-gap))
-      calc(2 * var(--mrflow-column) + 2 * var(--mrflow-gap)),
-    var(--mrflow-column-background) calc(2 * var(--mrflow-column) + 2 * var(--mrflow-gap)) 100%
-  );
+  background: none !important;
 }
 
 /* Anything else GitLab puts in the list (loaders, empty states) has no column */
