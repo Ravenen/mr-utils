@@ -3,7 +3,9 @@ import type { Feature, FeatureContext } from "@/core/lifecycle";
 import type { Route } from "@/core/router";
 import type { MrRef } from "@/core/storage/mr-records";
 import { readMrRecord } from "@/core/storage/mr-records";
-import { showApiError } from "@/ui/gitlab";
+import { itemMeta, mergeRequestItemPath, mergeRequestItems, mergeRequestList } from "@/core/gitlab/dom";
+import { showApiError } from "@/ui/alert";
+import { spinner } from "@/ui/spinner";
 import { waitFor } from "@/utils/async";
 import { DECORATION_CLASSES, DECORATION_SELECTOR, decorateMergeRequest } from "./decorate";
 
@@ -32,7 +34,7 @@ export const mrListFeature: Feature<MrListRoute> = {
     // Wait for MR elements to appear (an empty list never gets any, hence the timeout)
     const elements = await waitFor(
       () => {
-        const found = getNativeMergeRequestElements();
+        const found = mergeRequestItems(".kanban-board");
         return found.length > 0 ? found : null;
       },
       { signal: ctx.signal },
@@ -40,7 +42,7 @@ export const mrListFeature: Feature<MrListRoute> = {
     if (!elements || ctx.signal.aborted) return;
 
     const items = collectItems(elements);
-    const listContainer = elements[0]?.closest("ul") ?? null;
+    const listContainer = elements[0] ? mergeRequestList(elements[0]) : null;
     const onError = (error: unknown) => {
       if (ctx.signal.aborted) return;
       const alert = showApiError(document.querySelector(".kanban-board") ?? listContainer, error);
@@ -52,16 +54,10 @@ export const mrListFeature: Feature<MrListRoute> = {
   },
 };
 
-// Native MR items only, never the cards on our own board
-function getNativeMergeRequestElements(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(".merge-request")].filter((el) => !el.closest(".kanban-board"));
-}
-
 function collectItems(elements: HTMLElement[]): Item[] {
   const items: Item[] = [];
   elements.forEach((mrElement, index) => {
-    if (mrElement.tagName !== "LI") return;
-    const href = mrElement.querySelector("[data-testid='issuable-title-link']")?.getAttribute("href");
+    const href = mergeRequestItemPath(mrElement);
     if (!href) return;
     const matches = new URL(href, location.origin).pathname.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
     if (!matches?.[1] || !matches[2]) return;
@@ -107,32 +103,31 @@ async function mountBoard(
   document.querySelectorAll(".kanban-board").forEach((el) => el.remove());
   const { board, columns } = createBoard();
   listContainer.parentNode.insertBefore(board, listContainer);
-  listContainer.style.visibility = "hidden";
-  listContainer.style.position = "absolute";
-  listContainer.style.left = "-9999px";
+  // Off screen rather than display:none, so that GitLab keeps rendering it and we can clone the items
+  listContainer.classList.add("mrflow-offscreen");
   ctx.onCleanup(() => {
     board.remove();
-    listContainer.style.visibility = "";
-    listContainer.style.position = "";
-    listContainer.style.left = "";
+    listContainer.classList.remove("mrflow-offscreen");
   });
 
   // Put a decorated clone of the native item into its column, replacing the item's previous card.
-  // Order inside a column is kept via CSS `order`.
+  // Cards keep the order of the native list.
   const cards = new Map<Item, HTMLElement>();
   const renderCard = (item: Item, mrData: MrData | null) => {
     const card = item.mrElement.cloneNode(true) as HTMLElement;
     card.classList.add("mr-card");
     card.classList.remove("!gl-flex");
-    card.style.order = String(item.index);
+    card.dataset.mrflowIndex = String(item.index);
     // Remove all classes except 'issuable-meta' to fix styling issues
-    const metaEl = card.getElementsByClassName("issuable-meta")[0];
+    const metaEl = itemMeta(card);
     if (metaEl) metaEl.className = "issuable-meta";
     const columnName = getColumnName(mrData);
     if (mrData) decorateMergeRequest(card, mrData, { showSeenBanners: columnName !== "To Review" });
     cards.get(item)?.remove();
     cards.set(item, card);
-    columns[columnName].appendChild(card);
+    const column = columns[columnName];
+    const next = [...column.children].find((el) => Number((el as HTMLElement).dataset.mrflowIndex) > item.index);
+    column.insertBefore(card, next ?? null);
   };
 
   // FLIP: remember where every card is, apply the change, then slide each moved card from its old place.
@@ -237,9 +232,6 @@ function setColumnsLoading(columns: Columns, isLoading: boolean) {
     if (!header) return;
     header.querySelector(".mrflow-loading")?.remove();
     if (!isLoading) return;
-    const spinner = document.createElement("span");
-    spinner.className = "mrflow-loading gl-spinner gl-spinner-sm gl-spinner-dark gl-ml-2 gl-align-middle";
-    spinner.setAttribute("aria-label", "Loading");
-    header.appendChild(spinner);
+    header.appendChild(spinner());
   });
 }

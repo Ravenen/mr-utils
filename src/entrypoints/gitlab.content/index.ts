@@ -1,5 +1,6 @@
 import "./style.css";
 import { createGitLabApi, getCurrentUserId } from "@/core/gitlab/api";
+import { csrfToken } from "@/core/gitlab/dom";
 import { startFeatures } from "@/core/lifecycle";
 import { loadSettings } from "@/core/settings";
 import { features } from "@/features";
@@ -15,7 +16,7 @@ export default defineContentScript({
   main(ctx) {
     const api = createGitLabApi({
       origin: location.origin,
-      getCsrfToken: () => document.querySelector('meta[name="csrf-token"]')?.getAttribute("content"),
+      getCsrfToken: () => csrfToken(),
     });
     startFeatures(
       features,

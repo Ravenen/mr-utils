@@ -10,7 +10,9 @@ Built with WXT (Vite) + TypeScript, pnpm. Source in `src/`, output in `.output/`
 - `src/features/`: the registry (`index.ts`); `mr-list/` (Kanban or native list badges and banners), `mr-page/` (seen state, approval guard).
 - `src/core/gitlab/`: `api.ts` (`createGitLabApi`: limiter, retries, shared GraphQL requests; one instance per page), `queries.ts` (GraphQL queries and response types), `merge-requests.ts` (the three loading stages, `computeActivity`, `processMRData`). No DOM access here; tests count the requests per scenario.
 - `src/core/storage/`: `mr-records.ts` (last shown data per MR), `mr-state.ts` (per-MR state); `src/core/settings.ts`.
-- `src/ui/gitlab.ts`: native badges, banners, icons, alert.
+- `src/core/gitlab/dom.ts`: every GitLab selector, stable hooks (`data-testid`, `js-` classes) first with fallbacks to older markup.
+- `src/ui/`: native components (`badge.ts`, `alert.ts`, `checkbox.ts`, `spinner.ts`, `icons.ts`).
+- `src/test/fixtures.ts`: GitLab markup trimmed from GitLab's own components, a fake API and a feature context for tests.
 - `src/utils/`: pure helpers with Vitest tests next to them (`*.test.ts`).
 - `src/entrypoints/popup/`: settings popup (`storage.sync`).
 - `public/`: icons, copied as is. The manifest is generated from `wxt.config.ts` and `package.json` (version).
@@ -31,6 +33,8 @@ pnpm exec web-ext lint --source-dir .output/firefox-mv3
 - **UI must look native to GitLab.** Use GitLab UI / Pajamas classes (`gl-badge badge-*`, `gl-*` utilities) and `--gl-*` CSS variables so dark mode works. No hard-coded colors. Take icons from GitLab's sprite via `getIconSpriteUrl()`: the sprite URL is hashed per GitLab deploy.
 - **Mind GitLab rate limits.** All API calls go through `ctx.api` (`src/core/gitlab/api.ts`: concurrency limit, short 429 `Retry-After` retried, long ones fail fast and show `showApiError`; identical GraphQL requests in flight are shared). MR details come from GraphQL per project and batch of iids: `MERGE_REQUESTS_QUERY` (cheap, no comments) and `MERGE_REQUESTS_NOTES_QUERY` (`notes(filter: ONLY_COMMENTS)`, so system notes are skipped; only for MRs never seen or whose `getActivityKey` changed since the last stored record, batched by comment count); never add per-MR requests. GraphQL POSTs must send `X-CSRF-Token`, otherwise GitLab answers as an anonymous user.
 - **SPA navigation and lifecycle.** GitLab rewrites the URL (e.g. the list redirects to `?sort=...&state=opened`). A feature keeps no module state: everything lives in `mount(ctx)`. Pass `ctx.signal` to every request and wait, check it after every await, and remove everything you add to the page in `ctx.onCleanup`, so mounting again is idempotent.
+- **GitLab selectors live only in `src/core/gitlab/dom.ts`.** Prefer `data-testid` and check GitLab's source for it; keep a fallback for the older markup and cover both in `dom.test.ts`. No text matching (GitLab is localized).
+- **No inline styles** (`el.style`, `style=`): add a `mrflow-` class in `style.css`, or use `gl-*` utilities. Web Animations are fine.
 - **Do not use GitLab's class names on our own containers in a way that native selectors can match.** Prefix new classes with `mrflow-`.
 - The last shown data per MR is stored in `localStorage["mr-utils/mr/<user>/<project>/<iid>"]` (pruned after 30 days) and lays out the board before the API answers.
 - Per-MR state lives in `localStorage["<canonical MR path>/mr-utils"]` (`getCanonicalMrPath`). The extension is published, so keep stored data backward compatible or migrate it.

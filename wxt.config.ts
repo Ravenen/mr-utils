@@ -43,6 +43,6 @@ export default defineConfig({
   }),
   zip: {
     // AMO reviewers rebuild the extension from this archive (see README, "Building from source")
-    excludeSources: [".github/**", "docs/**", "e2e/**", "**/*.test.ts"],
+    excludeSources: [".github/**", "docs/**", "e2e/**", "**/*.test.ts", "src/test/**"],
   },
 });

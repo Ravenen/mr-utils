@@ -128,3 +128,19 @@ span.badge-pill:has(+ span.badge-pill) {
 .kanban-count {
   color: var(--gl-text-color-subtle);
 }
+
+/* Native MR list moved off screen under the board: GitLab keeps rendering it, cards are cloned from it */
+.mrflow-offscreen {
+  visibility: hidden;
+  position: absolute;
+  left: -9999px;
+}
+
+/* Approve button / merge section hidden until every check is ticked */
+.mrflow-hidden {
+  display: none !important;
+}
+
+.mrflow-approve-row {
+  height: 32px;
+}

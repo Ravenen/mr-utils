@@ -297,7 +297,7 @@ interface ChecklistItem {
 - [x] WXT + TS + lint + Vitest + CI — #7
 - [x] Роутер і життєвий цикл фіч — #3
 - [x] GraphQL-клієнт, кеш, обмежувач — #4
-- [ ] `dom.ts`, нативні UI-компоненти — #5
+- [x] `dom.ts`, нативні UI-компоненти — #5
 - [ ] Kanban через CSS Grid над нативним списком — #6
 - [ ] Схема налаштувань + міграція, options page — #8
 - [ ] Release workflow + публікація в CWS і AMO — #9
