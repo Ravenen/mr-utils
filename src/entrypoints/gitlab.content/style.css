@@ -119,9 +119,9 @@ span.badge-pill:has(+ span.badge-pill) {
   filter: none;
 }
 
-/* Approved MR highlight */
+/* Approved MR highlight in the native list (board off). Success feedback color: green-50 light, green-900 dark */
 .greened {
-  background-color: rgba(0, 149, 0, 0.1) !important;
+  background-color: var(--gl-feedback-success-background-color, rgba(0, 149, 0, 0.1)) !important;
 }
 
 /* Column count */
