@@ -3,3 +3,5 @@ node_modules/
 .output/
 .wxt/
 web-ext.config.ts
+test-results/
+playwright-report/

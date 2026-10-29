@@ -1,0 +1,67 @@
+// GitLab pages for the e2e tests. The markup is trimmed from GitLab's own components
+// (issuable_item.vue, merge_requests_list_app.vue, approvals.vue, merge_widget.vue) and holds no real data.
+
+const TITLES = [
+  "Fix flaky pipeline in the deploy stage",
+  "Add dark mode to the settings page",
+  "Draft: Refactor the approvals widget",
+  "Bump dependency versions",
+  "Update the merge request docs",
+  "Improve error messages for 429 responses",
+  "Remove the legacy API client",
+  "Speed up the board",
+];
+
+export const SPRITE = "/assets/icons-e2e.svg";
+
+export function listItem(projectPath: string, iid: number): string {
+  return `
+    <li id="issuable_${iid}" class="issue merge-request !gl-flex gl-flex-col" data-testid="issuable-item-wrapper">
+      <div class="issuable-main-info">
+        <div data-testid="issuable-title" class="issue-title title">
+          <a href="/${projectPath}/-/merge_requests/${iid}" data-testid="issuable-title-link">${TITLES[(iid - 1) % TITLES.length]}</a>
+        </div>
+        <div class="issuable-info"><span data-testid="issuable-reference">!${iid}</span> created by <span class="author">Jane Doe</span></div>
+      </div>
+      <div class="issuable-meta">
+        <ul class="controls">
+          <li data-testid="issuable-comments"><a href="#"><svg><use href="${SPRITE}#comments"></use></svg> ${iid}</a></li>
+          <li><button data-testid="mr-approvals"><span>0 of 2</span></button></li>
+        </ul>
+      </div>
+    </li>`;
+}
+
+// An MR list. With `redirect`, the page does what GitLab does on load: rewrites the URL to the default
+// sort and re-renders the list (new <li> elements) a moment later.
+export function listPage(projectPath: string, iids: number[], { redirect = false } = {}): string {
+  const items = iids.map((iid) => listItem(projectPath, iid)).join("");
+  const rerender = redirect
+    ? `<script>
+        setTimeout(() => {
+          history.replaceState(null, "", location.pathname + "?sort=created_date&state=opened");
+          document.querySelector("ul.issuable-list").innerHTML = ${JSON.stringify(items)};
+        }, 50);
+      </script>`
+    : "";
+  return `<!doctype html><html><head><meta name="csrf-token" content="e2e-token"><title>Merge requests</title></head>
+    <body><svg hidden><use href="${SPRITE}#home"></use></svg>
+      <main><ul class="content-list issuable-list issues-list">${items}</ul></main>${rerender}</body></html>`;
+}
+
+export function mrPage(): string {
+  return `<!doctype html><html><head><meta name="csrf-token" content="e2e-token"><title>Merge request</title></head>
+    <body><svg hidden><use href="${SPRITE}#home"></use></svg>
+      <div id="widget-state" class="mr-state-widget">
+        <div class="js-mr-approvals mr-section-container">
+          <div class="state-container"><div class="gl-flex gl-flex-col">
+            <div class="gl-flex"><button class="btn btn-confirm" data-testid="approve-button">Approve</button><div>Requires 2 approvals</div></div>
+          </div></div>
+        </div>
+        <div class="mr-section-container">
+          <div class="mr-widget-section" data-testid="mr-widget-content">
+            <div data-testid="ready_to_merge_state"><div class="mr-widget-body mr-widget-body-ready-merge">Ready to merge!</div></div>
+          </div>
+        </div>
+      </div></body></html>`;
+}

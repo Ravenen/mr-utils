@@ -17,15 +17,21 @@ importers:
       '@gitlab/ui':
         specifier: ^138.7.3
         version: 138.7.3(@gitlab/svgs@3.169.0)(dompurify@3.4.17)(emoji-regex@10.6.0)(pikaday@1.8.2)(tailwindcss@3.4.19)(vue@3.5.44(typescript@6.0.3))
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
       '@vitejs/plugin-vue':
         specifier: ^6.0.10
-        version: 6.0.10(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))
+        version: 6.0.10(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))
       '@vue/test-utils':
         specifier: ^2.5.1
         version: 2.5.1(@vue/compiler-dom@3.5.44)(@vue/server-renderer@3.5.44)(vue@3.5.44(typescript@6.0.3))
       '@wxt-dev/module-vue':
         specifier: ^1.0.3
-        version: 1.0.3(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))(wxt@0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7)))
+        version: 1.0.3(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))(wxt@0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7)))
       eslint:
         specifier: ^10.13.0
         version: 10.13.0(jiti@1.21.7)
@@ -49,10 +55,10 @@ importers:
         version: 8.72.1(eslint@10.13.0(jiti@1.21.7))(typescript@6.0.3)
       vite:
         specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.6.6)(jiti@1.21.7)
+        version: 8.3.5(@types/node@22.20.5)(jiti@1.21.7)
       vitest:
         specifier: ^5.0.5
-        version: 5.0.5(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))
+        version: 5.0.5(@types/node@22.20.5)(happy-dom@21.0.4)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))
       vue:
         specifier: ^3.5.44
         version: 3.5.44(typescript@6.0.3)
@@ -64,7 +70,7 @@ importers:
         version: 10.8.0(jiti@1.21.7)
       wxt:
         specifier: ^0.21.5
-        version: 0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7))
+        version: 0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7))
 
 packages:
 
@@ -303,6 +309,11 @@ packages:
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
+  '@playwright/test@1.63.0':
+    resolution: {integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   '@pnpm/config.env-replace@1.1.0':
     resolution: {integrity: sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w==}
     engines: {node: '>=12.22.0'}
@@ -433,8 +444,8 @@ packages:
   '@types/minimatch@3.0.5':
     resolution: {integrity: sha512-Klz949h02Gz2uZCMGwDUSDS1YBlTdDDgbWHi+81l29tQALUtvz4rAYi5uoVhE5Lagoq6DeqAUlbrHvW/mXDgdQ==}
 
-  '@types/node@26.6.6':
-    resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
+  '@types/node@22.20.5':
+    resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -1919,6 +1930,16 @@ packages:
   pkg-types@2.4.0:
     resolution: {integrity: sha512-07Fys7iVx0X6TcviMOgogM1Lk33ZyqOezMnU79S+kffWqwolG/5W9V8EgQSeYCIfFTYVgssRbnH630Oa2+soBA==}
 
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   popper.js@1.16.1:
     resolution: {integrity: sha512-Wb4p1J4zyFTbM+u6WuO4XstYx4Ky9Cewe4DWrel7B0w6VVICvPwdOpotjzcf6eD8TsckVnIMNONQyPIUFOUbCQ==}
     deprecated: You can find the new Popper v2 at @popperjs/core, this package is dedicated to the legacy v1
@@ -2320,8 +2341,8 @@ packages:
   uhyphen@0.2.0:
     resolution: {integrity: sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==}
 
-  undici-types@8.9.0:
-    resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
   undici@7.30.1:
     resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
@@ -2900,6 +2921,10 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
+  '@playwright/test@1.63.0':
+    dependencies:
+      playwright: 1.63.0
+
   '@pnpm/config.env-replace@1.1.0': {}
 
   '@pnpm/network.ca-file@1.0.2':
@@ -2978,9 +3003,9 @@ snapshots:
 
   '@types/minimatch@3.0.5': {}
 
-  '@types/node@26.6.6':
+  '@types/node@22.20.5':
     dependencies:
-      undici-types: 8.9.0
+      undici-types: 6.21.0
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -2989,7 +3014,7 @@ snapshots:
 
   '@types/ws@8.18.2':
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
 
   '@typescript-eslint/eslint-plugin@8.72.1(@typescript-eslint/parser@8.72.1(eslint@10.13.0(jiti@1.21.7))(typescript@6.0.3))(eslint@10.13.0(jiti@1.21.7))(typescript@6.0.3)':
     dependencies:
@@ -3082,20 +3107,20 @@ snapshots:
       '@typescript-eslint/types': 8.72.1
       eslint-visitor-keys: 5.0.1
 
-  '@vitejs/plugin-vue@6.0.10(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))':
+  '@vitejs/plugin-vue@6.0.10(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.3.5(@types/node@26.6.6)(jiti@1.21.7)
+      vite: 8.3.5(@types/node@22.20.5)(jiti@1.21.7)
       vue: 3.5.44(typescript@6.0.3)
 
-  '@vitest/mocker@5.0.5(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))':
+  '@vitest/mocker@5.0.5(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.5
       estree-walker: 3.0.3
       magic-string: 1.4.5
     optionalDependencies:
-      vite: 8.3.5(@types/node@26.6.6)(jiti@1.21.7)
+      vite: 8.3.5(@types/node@22.20.5)(jiti@1.21.7)
 
   '@vitest/spy@5.0.5': {}
 
@@ -3199,10 +3224,10 @@ snapshots:
     dependencies:
       '@types/har-format': 1.2.16
 
-  '@wxt-dev/module-vue@1.0.3(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))(wxt@0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7)))':
+  '@wxt-dev/module-vue@1.0.3(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))(wxt@0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7)))':
     dependencies:
-      '@vitejs/plugin-vue': 6.0.10(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))
-      wxt: 0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7))
+      '@vitejs/plugin-vue': 6.0.10(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(vue@3.5.44(typescript@6.0.3))
+      wxt: 0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7))
     transitivePeerDependencies:
       - vite
       - vue
@@ -3366,7 +3391,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
 
   bundle-name@4.1.1:
     dependencies:
@@ -3455,7 +3480,7 @@ snapshots:
 
   chrome-launcher@1.2.0:
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 2.0.2
@@ -3961,7 +3986,7 @@ snapshots:
 
   happy-dom@21.0.4:
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.2
       buffer-image-size: 0.6.4
@@ -4528,6 +4553,12 @@ snapshots:
       exsolve: 1.2.0
       pathe: 2.0.3
 
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
+
   popper.js@1.16.1: {}
 
   portal-vue@2.1.7(vue@3.5.44(typescript@6.0.3)):
@@ -4906,11 +4937,11 @@ snapshots:
 
   uhyphen@0.2.0: {}
 
-  undici-types@8.9.0: {}
+  undici-types@6.21.0: {}
 
   undici@7.30.1: {}
 
-  unimport@6.5.0(rolldown@1.2.15)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7)):
+  unimport@6.5.0(rolldown@1.2.15)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7)):
     dependencies:
       acorn: 8.19.0
       escape-string-regexp: 5.0.0
@@ -4924,7 +4955,7 @@ snapshots:
       scule: 1.3.0
       strip-literal: 4.0.0
       tinyglobby: 0.2.17
-      unplugin: 3.7.0(rolldown@1.2.15)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))
+      unplugin: 3.7.0(rolldown@1.2.15)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))
       unplugin-utils: 0.3.2
     optionalDependencies:
       rolldown: 1.2.15
@@ -4946,7 +4977,7 @@ snapshots:
       pathe: 2.0.3
       picomatch: 4.0.7
 
-  unplugin@3.7.0(rolldown@1.2.15)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7)):
+  unplugin@3.7.0(rolldown@1.2.15)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@rolldown/pluginutils': 1.0.1
@@ -4954,7 +4985,7 @@ snapshots:
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       rolldown: 1.2.15
-      vite: 8.3.5(@types/node@26.6.6)(jiti@1.21.7)
+      vite: 8.3.5(@types/node@22.20.5)(jiti@1.21.7)
 
   upath@3.0.8: {}
 
@@ -4977,7 +5008,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7):
+  vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -4985,14 +5016,14 @@ snapshots:
       rolldown: 1.2.15
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
       fsevents: 2.3.3
       jiti: 1.21.7
 
-  vitest@5.0.5(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7)):
+  vitest@5.0.5(@types/node@22.20.5)(happy-dom@21.0.4)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.5(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))
+      '@vitest/mocker': 5.0.5(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -5003,10 +5034,10 @@ snapshots:
       tinybench: 6.2.2
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
-      vite: 8.3.5(@types/node@26.6.6)(jiti@1.21.7)
+      vite: 8.3.5(@types/node@22.20.5)(jiti@1.21.7)
       why-is-node-running: 3.2.1
     optionalDependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
       happy-dom: 21.0.4
     transitivePeerDependencies:
       - msw
@@ -5138,7 +5169,7 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.2.1
 
-  wxt@0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7)):
+  wxt@0.21.5(eslint@10.13.0(jiti@1.21.7))(rolldown@1.2.15)(typescript@6.0.3)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))(web-ext@10.8.0(jiti@1.21.7)):
     dependencies:
       '@1natsu/wait-element': 5.0.0
       '@aklinker1/rollup-plugin-visualizer': 5.12.0
@@ -5167,8 +5198,8 @@ snapshots:
       tiny-open: 1.3.0
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
-      unimport: 6.5.0(rolldown@1.2.15)(vite@8.3.5(@types/node@26.6.6)(jiti@1.21.7))
-      vite: 8.3.5(@types/node@26.6.6)(jiti@1.21.7)
+      unimport: 6.5.0(rolldown@1.2.15)(vite@8.3.5(@types/node@22.20.5)(jiti@1.21.7))
+      vite: 8.3.5(@types/node@22.20.5)(jiti@1.21.7)
     optionalDependencies:
       eslint: 10.13.0(jiti@1.21.7)
       typescript: 6.0.3

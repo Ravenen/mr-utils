@@ -57,6 +57,7 @@ Built with [WXT](https://wxt.dev) and TypeScript. Requires Node.js 22+ and pnpm 
 pnpm install
 pnpm dev                      # Chrome with hot reload (pnpm dev:firefox for Firefox)
 pnpm lint && pnpm typecheck && pnpm test
+pnpm build && pnpm e2e         # Playwright on mock GitLab pages (first time: pnpm exec playwright install chromium)
 pnpm build                    # .output/chrome-mv3 (pnpm build:firefox -> .output/firefox-mv3)
 pnpm zip                      # .output/mrflow-<version>-chrome.zip
 pnpm zip:firefox              # .output/mrflow-<version>-firefox.zip + .output/mrflow-<version>-sources.zip
