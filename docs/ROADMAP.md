@@ -303,15 +303,15 @@ interface ChecklistItem {
 - [ ] Release workflow + публікація в CWS і AMO — #9
 - [ ] E2E-тести на фікстурах — #10
 
-### Milestone 2.1: approval guard — епік #11
-- [ ] Редактор чеклістів, умовні правила, `resetOn` — #13
-- [ ] Рівні підтвердження (checklist / confirm / comment / typed) для Approve і Merge — #14
-- [ ] Командний конфіг `.gitlab/mrflow.json` — #15
-
-### Milestone 2.2: hunk review — епік #12
+### Milestone 2.1: hunk review — епік #12
 - [ ] Прототип на поточному diffs DOM і на Rapid Diffs — #16
 - [ ] Хешування hunk, збереження, прогрес, синхронізація з нативним «Viewed» — #17
 - [ ] Навігація до наступного непереглянутого — #18
+
+### Milestone 2.2: approval guard — епік #11
+- [ ] Редактор чеклістів, умовні правила, `resetOn` — #13
+- [ ] Рівні підтвердження (checklist / confirm / comment / typed) для Approve і Merge — #14
+- [ ] Командний конфіг `.gitlab/mrflow.json` — #15
 
 ### Далі
 - Колонки «Мої / Чекають мене» — #21; pipeline, stale і «відстає на N» бейджі — #22; self-hosted GitLab — #23; синхронізація «переглянуто» — #24; i18n — #25.
