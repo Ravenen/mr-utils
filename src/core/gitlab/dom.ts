@@ -14,10 +14,9 @@ export function iconSpriteUrl(doc: Document = document): string | null {
 
 // == MR list ==
 
-// MR items of the native list (HAML and Vue lists both put "merge-request" on the <li>).
-// `exclude` leaves out items inside our own containers, e.g. the board's cards.
-export function mergeRequestItems(exclude: string, doc: Document = document): HTMLElement[] {
-  return [...doc.querySelectorAll<HTMLElement>("li.merge-request")].filter((el) => !el.closest(exclude));
+// MR items of the native list, in list order (HAML and Vue lists both put "merge-request" on the <li>)
+export function mergeRequestItems(root: ParentNode = document): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>("li.merge-request")];
 }
 
 // "/group/project/-/merge_requests/12" of an item

@@ -19,7 +19,7 @@ afterEach(() => {
 describe("MR list", () => {
   it("finds the items and their parts", () => {
     document.body.innerHTML = mrList(2);
-    const items = mergeRequestItems(".kanban-board");
+    const items = mergeRequestItems();
     expect(items).toHaveLength(2);
     expect(mergeRequestItemPath(items[0] as Element)).toBe("/g/p/-/merge_requests/1");
     const controls = itemControls(items[0] as Element) as Element;
@@ -29,13 +29,14 @@ describe("MR list", () => {
 
   it("finds the comments badge in the older markup", () => {
     document.body.innerHTML = mrList(1, { legacyComments: true });
-    const controls = itemControls(mergeRequestItems(".kanban-board")[0] as Element) as Element;
+    const controls = itemControls(mergeRequestItems()[0] as Element) as Element;
     expect(itemCommentsBadge(controls)?.parentElement).toBe(controls);
   });
 
-  it("leaves out items inside our own containers", () => {
-    document.body.innerHTML = `${mrList(2)}<div class="kanban-board">${mrList(1)}</div>`;
-    expect(mergeRequestItems(".kanban-board")).toHaveLength(2);
+  it("looks for items inside the given root", () => {
+    document.body.innerHTML = `${mrList(2)}<div id="other">${mrList(1)}</div>`;
+    expect(mergeRequestItems()).toHaveLength(3);
+    expect(mergeRequestItems(document.getElementById("other") as HTMLElement)).toHaveLength(1);
   });
 });
 

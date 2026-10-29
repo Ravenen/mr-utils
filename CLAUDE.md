@@ -7,7 +7,7 @@ Built with WXT (Vite) + TypeScript, pnpm. Source in `src/`, output in `.output/`
 - `src/entrypoints/gitlab.content/`: content script for GitLab pages (`index.ts` + injected `style.css`); only starts the features.
 - `src/core/router.ts`: `parseRoute` (MR list by scope, MR page and tab, other) and `watchUrl` (SPA navigation).
 - `src/core/lifecycle.ts`: `Feature { name, match(route), mount(ctx) }` and `startFeatures`. Features remount when the route key changes (a list: any filter/sort/page; an MR: not on tab switches).
-- `src/features/`: the registry (`index.ts`); `mr-list/` (Kanban or native list badges and banners), `mr-page/` (seen state, approval guard).
+- `src/features/`: the registry (`index.ts`); `mr-list/` (Kanban laid over the native list in `board.ts`, badges and banners in `decorate.ts`), `mr-page/` (seen state, approval guard).
 - `src/core/gitlab/`: `api.ts` (`createGitLabApi`: limiter, retries, shared GraphQL requests; one instance per page), `queries.ts` (GraphQL queries and response types), `merge-requests.ts` (the three loading stages, `computeActivity`, `processMRData`). No DOM access here; tests count the requests per scenario.
 - `src/core/storage/`: `mr-records.ts` (last shown data per MR), `mr-state.ts` (per-MR state); `src/core/settings.ts`.
 - `src/core/gitlab/dom.ts`: every GitLab selector, stable hooks (`data-testid`, `js-` classes) first with fallbacks to older markup.
@@ -36,6 +36,7 @@ pnpm exec web-ext lint --source-dir .output/firefox-mv3
 - **GitLab selectors live only in `src/core/gitlab/dom.ts`.** Prefer `data-testid` and check GitLab's source for it; keep a fallback for the older markup and cover both in `dom.test.ts`. No text matching (GitLab is localized).
 - **No inline styles** (`el.style`, `style=`): add a `mrflow-` class in `style.css`, or use `gl-*` utilities. Web Animations are fine.
 - **Do not use GitLab's class names on our own containers in a way that native selectors can match.** Prefix new classes with `mrflow-`.
+- **GitLab's elements belong to its Vue.** Never clone, move or remove them: hide them (`data-mrflow-replaced`) and lay them out with CSS (the board is the native `<ul>` as a grid). Mark state on them with `data-mrflow-*` attributes, not classes (Vue rewrites `class`). GitLab may re-create them at any time, so match them to data by MR key and re-apply on list changes.
 - The last shown data per MR is stored in `localStorage["mr-utils/mr/<user>/<project>/<iid>"]` (pruned after 30 days) and lays out the board before the API answers.
 - Per-MR state lives in `localStorage["<canonical MR path>/mr-utils"]` (`getCanonicalMrPath`). The extension is published, so keep stored data backward compatible or migrate it.
 - **AMO needs the source code** because the output is bundled: every Firefox release uploads `mrflow-<version>-sources.zip` next to the add-on. Keep the build reproducible from that zip (no absolute paths or timestamps in the output, pnpm pinned via `packageManager`, `pnpm-lock.yaml` committed), keep the output unminified, and keep README "Building from source" accurate. CI checks it with `scripts/verify-sources.sh`.

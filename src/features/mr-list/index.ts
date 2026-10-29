@@ -1,28 +1,24 @@
+import { mergeRequestItemPath, mergeRequestItems, mergeRequestList } from "@/core/gitlab/dom";
 import { loadMergeRequestsData, type MrData } from "@/core/gitlab/merge-requests";
 import type { Feature, FeatureContext } from "@/core/lifecycle";
 import type { Route } from "@/core/router";
-import type { MrRef } from "@/core/storage/mr-records";
-import { readMrRecord } from "@/core/storage/mr-records";
-import { itemMeta, mergeRequestItemPath, mergeRequestItems, mergeRequestList } from "@/core/gitlab/dom";
+import { readMrRecord, type MrRef } from "@/core/storage/mr-records";
 import { showApiError } from "@/ui/alert";
-import { spinner } from "@/ui/spinner";
 import { waitFor } from "@/utils/async";
-import { DECORATION_CLASSES, DECORATION_SELECTOR, decorateMergeRequest } from "./decorate";
+import { createBoard, type ColumnId } from "./board";
+import { clearDecorations, decorateMergeRequest } from "./decorate";
 
 type MrListRoute = Extract<Route, { kind: "mr-list" }>;
-type ColumnName = "To Review" | "Pending" | "Approved";
-type Columns = Record<ColumnName, HTMLElement>;
 
 interface Item extends MrRef {
-  index: number;
-  mrElement: HTMLElement;
+  key: string;
+  element: HTMLElement;
 }
 
-const COLUMN_NAMES: ColumnName[] = ["To Review", "Pending", "Approved"];
 const CARD_MOVE_MS = 400;
 const CARD_SHIFT_MS = 250;
 
-// MR list: a Kanban board over the native list, or badges and banners on the native items
+// MR list: a Kanban board laid over the native list, or badges and banners on the native items
 export const mrListFeature: Feature<MrListRoute> = {
   name: "mr-list",
   match: (route): route is MrListRoute => route.kind === "mr-list",
@@ -31,207 +27,164 @@ export const mrListFeature: Feature<MrListRoute> = {
     const state = ctx.route.url.searchParams.get("state");
     const kanban = ctx.settings.kanbanView && (state === null || state === "opened");
 
-    // Wait for MR elements to appear (an empty list never gets any, hence the timeout)
-    const elements = await waitFor(
-      () => {
-        const found = mergeRequestItems(".kanban-board");
-        return found.length > 0 ? found : null;
-      },
-      { signal: ctx.signal },
-    );
-    if (!elements || ctx.signal.aborted) return;
+    // Wait for MR items to appear (an empty list never gets any, hence the timeout)
+    const first = await waitFor(() => mergeRequestItems()[0], { signal: ctx.signal });
+    const list = first && mergeRequestList(first);
+    if (!list || ctx.signal.aborted) return;
 
-    const items = collectItems(elements);
-    const listContainer = elements[0] ? mergeRequestList(elements[0]) : null;
     const onError = (error: unknown) => {
       if (ctx.signal.aborted) return;
-      const alert = showApiError(document.querySelector(".kanban-board") ?? listContainer, error);
+      const anchor = list.previousElementSibling?.matches(".mrflow-board-header") ? list.previousElementSibling : list;
+      const alert = showApiError(anchor, error);
       if (alert) ctx.onCleanup(() => alert.remove());
     };
 
-    if (kanban) await mountBoard(ctx, items, listContainer, onError);
-    else await decorateNativeList(ctx, items, onError);
+    if (kanban) await mountBoard(ctx, list, onError);
+    else await decorateNativeList(ctx, list, onError);
   },
 };
 
-function collectItems(elements: HTMLElement[]): Item[] {
-  const items: Item[] = [];
-  elements.forEach((mrElement, index) => {
-    const href = mergeRequestItemPath(mrElement);
-    if (!href) return;
-    const matches = new URL(href, location.origin).pathname.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
-    if (!matches?.[1] || !matches[2]) return;
-    items.push({ index, mrElement, projectPath: matches[1], mrIid: matches[2] });
+// The MR items currently in the list. GitLab may re-create them at any time, so they are looked up
+// again after every change of the list and matched to their data by key.
+function readItems(list: HTMLElement): Item[] {
+  return mergeRequestItems(list).flatMap((element) => {
+    const href = mergeRequestItemPath(element);
+    const matches = href && new URL(href, location.origin).pathname.match(/^\/(.*?)\/-\/merge_requests\/(\d+)/);
+    if (!matches?.[1] || !matches[2]) return [];
+    return [{ key: `${matches[1]}#${matches[2]}`, element, projectPath: matches[1], mrIid: matches[2] }];
   });
-  return items;
+}
+
+// Calls onChange when GitLab adds, removes or re-creates items of the list
+function watchList(ctx: FeatureContext, list: HTMLElement, onChange: () => void) {
+  const observer = new MutationObserver(() => {
+    if (!ctx.signal.aborted) onChange();
+  });
+  observer.observe(list, { childList: true });
+  ctx.onCleanup(() => observer.disconnect());
 }
 
 // Native list view: decorate the native items once all details are in
-async function decorateNativeList(ctx: FeatureContext, items: Item[], onError: (error: unknown) => void) {
-  const dataByItem = new Map<Item, MrData>();
+async function decorateNativeList(ctx: FeatureContext, list: HTMLElement, onError: (error: unknown) => void) {
+  let items = readItems(list);
+  const data = new Map<string, MrData>();
+  const decorate = (item: Item) => {
+    const mrData = data.get(item.key);
+    if (mrData) decorateMergeRequest(item.element, mrData, { highlightApproved: true });
+  };
+  ctx.onCleanup(() => readItems(list).forEach((item) => clearDecorations(item.element)));
+
   await loadMergeRequestsData(ctx, items, {
     onError,
-    onUpdate: (updates) => updates.forEach(([item, mrData]) => dataByItem.set(item, mrData)),
+    onUpdate: (updates) => updates.forEach(([item, mrData]) => data.set(item.key, mrData)),
   });
   if (ctx.signal.aborted) return;
-  dataByItem.forEach((mrData, item) => {
-    decorateMergeRequest(item.mrElement, mrData);
-    if (mrData.hasUserApproved && !mrData.isDraft) item.mrElement.classList.add("greened");
-  });
-  ctx.onCleanup(() =>
-    items.forEach(({ mrElement }) => {
-      mrElement.querySelectorAll(DECORATION_SELECTOR).forEach((el) => el.remove());
-      mrElement.classList.remove(...DECORATION_CLASSES);
-    }),
-  );
+  items = readItems(list);
+  items.forEach(decorate);
+  watchList(ctx, list, () => readItems(list).forEach(decorate));
 }
 
-// Kanban: cards are clones of the native items, the native list is moved off screen.
-// Stage 1 lays the board out from what was last seen; stages 2 and 3 (the API) move the cards.
-async function mountBoard(
-  ctx: FeatureContext,
-  items: Item[],
-  listContainer: HTMLElement | null,
-  onError: (error: unknown) => void,
-) {
-  if (!listContainer?.parentNode) {
-    console.error("MRFlow: cannot find the merge requests list container element.");
-    return;
-  }
+function columnOf(mrData: MrData | null | undefined): ColumnId {
+  if (mrData?.hasUserApproved) return "approved";
+  if (mrData && mrData.unresolvedUserThreads > 0) return "pending";
+  return "review";
+}
 
-  // A board left by an older mount must not stay (mounting is idempotent)
-  document.querySelectorAll(".kanban-board").forEach((el) => el.remove());
-  const { board, columns } = createBoard();
-  listContainer.parentNode.insertBefore(board, listContainer);
-  // Off screen rather than display:none, so that GitLab keeps rendering it and we can clone the items
-  listContainer.classList.add("mrflow-offscreen");
+// Kanban over the native list. Stage 1 lays the board out from what was last seen; stages 2 and 3
+// (the API) move the items between columns.
+async function mountBoard(ctx: FeatureContext, list: HTMLElement, onError: (error: unknown) => void) {
+  const board = createBoard(list);
   ctx.onCleanup(() => {
-    board.remove();
-    listContainer.classList.remove("mrflow-offscreen");
+    board.destroy();
+    readItems(list).forEach((item) => clearDecorations(item.element));
   });
 
-  // Put a decorated clone of the native item into its column, replacing the item's previous card.
-  // Cards keep the order of the native list.
-  const cards = new Map<Item, HTMLElement>();
-  const renderCard = (item: Item, mrData: MrData | null) => {
-    const card = item.mrElement.cloneNode(true) as HTMLElement;
-    card.classList.add("mr-card");
-    card.classList.remove("!gl-flex");
-    card.dataset.mrflowIndex = String(item.index);
-    // Remove all classes except 'issuable-meta' to fix styling issues
-    const metaEl = itemMeta(card);
-    if (metaEl) metaEl.className = "issuable-meta";
-    const columnName = getColumnName(mrData);
-    if (mrData) decorateMergeRequest(card, mrData, { showSeenBanners: columnName !== "To Review" });
-    cards.get(item)?.remove();
-    cards.set(item, card);
-    const column = columns[columnName];
-    const next = [...column.children].find((el) => Number((el as HTMLElement).dataset.mrflowIndex) > item.index);
-    column.insertBefore(card, next ?? null);
+  let items = readItems(list);
+  // Latest data per MR: the stored record first, then what the API returns
+  const data = new Map<string, MrData | null>();
+  const remember = (item: Item) => {
+    if (!data.has(item.key)) data.set(item.key, readMrRecord(ctx.userId, item)?.mrData ?? null);
   };
 
-  // FLIP: remember where every card is, apply the change, then slide each moved card from its old place.
-  // Covers cards changing columns and the cards that shift to fill the gap.
-  const animateCardMoves = (applyChange: () => void) => {
-    const before = new Map(
-      [...cards].map(([item, card]) => [item, { rect: card.getBoundingClientRect(), column: card.parentElement }]),
-    );
-    applyChange();
-    if (!ctx.settings.animateCards || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const render = (item: Item) => {
+    const mrData = data.get(item.key);
+    const column = columnOf(mrData);
+    board.place(item.element, column);
+    if (mrData) decorateMergeRequest(item.element, mrData, { showSeenBanners: column !== "review" });
+    else clearDecorations(item.element);
+    board.track(item.element);
+  };
 
-    cards.forEach((card, item) => {
-      const from = before.get(item);
-      if (!from) return;
-      const to = card.getBoundingClientRect();
+  // FLIP: remember where every item is, apply the change, then slide each moved item from its old place.
+  // Covers items changing columns and the items that shift to fill the gap.
+  const animateMoves = (applyChange: () => void) => {
+    const animate = ctx.settings.animateCards && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const before = animate
+      ? new Map(
+          items.map((item) => [
+            item.element,
+            { rect: item.element.getBoundingClientRect(), column: item.element.dataset.mrflowColumn },
+          ]),
+        )
+      : null;
+    applyChange();
+    if (!before) return;
+
+    for (const { element } of items) {
+      const from = before.get(element);
+      if (!from) continue;
+      const to = element.getBoundingClientRect();
       const dx = from.rect.left - to.left;
       const dy = from.rect.top - to.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
 
-      // Cards changing columns travel above the others
-      const changesColumn = from.column !== card.parentElement;
-      if (changesColumn) card.classList.add("mrflow-card-moving");
-      const animation = card.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], {
-        duration: changesColumn ? CARD_MOVE_MS : CARD_SHIFT_MS,
-        easing: "cubic-bezier(0.2, 0, 0, 1)",
+      // Items changing columns travel above the others
+      const changesColumn = from.column !== element.dataset.mrflowColumn;
+      if (changesColumn) element.dataset.mrflowMoving = "";
+      const animation = element.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+        { duration: changesColumn ? CARD_MOVE_MS : CARD_SHIFT_MS, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
+      animation.onfinish = animation.oncancel = () => delete element.dataset.mrflowMoving;
+    }
+  };
+
+  let loading = 0;
+  const load = async (toLoad: Item[]) => {
+    if (toLoad.length === 0) return;
+    board.setLoading(++loading > 0);
+    try {
+      await loadMergeRequestsData(ctx, toLoad, {
+        onError,
+        progressive: ctx.settings.boardLoading === "progressive",
+        onUpdate: (updates) =>
+          animateMoves(() => {
+            updates.forEach(([item, mrData]) => data.set(item.key, mrData));
+            const updated = new Set(updates.map(([item]) => item.key));
+            items.filter((item) => updated.has(item.key)).forEach(render);
+            board.updateCounts();
+          }),
       });
-      animation.onfinish = animation.oncancel = () => card.classList.remove("mrflow-card-moving");
-    });
+    } finally {
+      if (!ctx.signal.aborted) board.setLoading(--loading > 0);
+    }
   };
 
   // Stage 1: lay the board out right away from what was last seen for each MR (if anything)
-  items.forEach((item) => renderCard(item, readMrRecord(ctx.userId, item)?.mrData ?? null));
-  updateColumnCounts(columns);
-  setColumnsLoading(columns, true);
+  items.forEach(remember);
+  items.forEach(render);
+  board.updateCounts();
+
+  // GitLab re-rendered the list: place the new or re-created items, load MRs not seen in this mount
+  watchList(ctx, list, () => {
+    items = readItems(list);
+    const fresh = items.filter((item) => !data.has(item.key));
+    fresh.forEach(remember);
+    items.filter((item) => item.element.dataset.mrflowColumn === undefined).forEach(render);
+    board.updateCounts();
+    void load(fresh);
+  });
 
   // Stages 2 and 3: details from the API; updates come per batch or, by default, once per stage
-  await loadMergeRequestsData(ctx, items, {
-    onError,
-    progressive: ctx.settings.boardLoading === "progressive",
-    onUpdate: (updates) =>
-      animateCardMoves(() => {
-        updates.forEach(([item, mrData]) => renderCard(item, mrData));
-        updateColumnCounts(columns);
-      }),
-  });
-  if (!ctx.signal.aborted) setColumnsLoading(columns, false);
-}
-
-function createBoard(): { board: HTMLElement; columns: Columns } {
-  const board = document.createElement("div");
-  board.classList.add("kanban-board");
-  const columns = {} as Columns;
-  COLUMN_NAMES.forEach((columnName) => {
-    const column = document.createElement("div");
-    column.classList.add("kanban-column");
-    column.dataset.column = columnName;
-
-    const header = document.createElement("div");
-    header.classList.add("kanban-column-header");
-    header.textContent = columnName;
-
-    const body = document.createElement("ul");
-    body.classList.add("content-list", "mr-list", "issuable-list", "kanban-column-body");
-
-    column.appendChild(header);
-    column.appendChild(body);
-    board.appendChild(column);
-    columns[columnName] = body;
-  });
-  return { board, columns };
-}
-
-function getColumnName(mrData: MrData | null): ColumnName {
-  if (mrData?.hasUserApproved) return "Approved";
-  if (mrData && mrData.unresolvedUserThreads > 0) return "Pending";
-  return "To Review";
-}
-
-function columnHeader(column: HTMLElement): HTMLElement | null {
-  return column.parentElement?.querySelector(".kanban-column-header") ?? null;
-}
-
-// MR count in each column header
-function updateColumnCounts(columns: Columns) {
-  Object.values(columns).forEach((column) => {
-    const header = columnHeader(column);
-    if (!header) return;
-    let countElement = header.querySelector(".kanban-count");
-    if (!countElement) {
-      countElement = document.createElement("span");
-      countElement.classList.add("kanban-count");
-      header.appendChild(countElement);
-    }
-    countElement.textContent = ` (${column.querySelectorAll(".mr-card").length})`;
-  });
-}
-
-// Small native GitLab spinner in the column headers while details are still loading
-function setColumnsLoading(columns: Columns, isLoading: boolean) {
-  Object.values(columns).forEach((column) => {
-    const header = columnHeader(column);
-    if (!header) return;
-    header.querySelector(".mrflow-loading")?.remove();
-    if (!isLoading) return;
-    header.appendChild(spinner());
-  });
+  await load(items);
 }
