@@ -86,9 +86,11 @@ ul[data-mrflow-board] > [data-mrflow-column="approved"] {
   grid-column: 3;
 }
 
-/* The item's meta (badges, approvals) goes under its title instead of beside it */
+/* The item's meta (badges, approvals) goes under its title instead of beside it, as far below as GitLab's own
+   row gap (gl-gap-y-3) puts it in the native item's column layout. Board only: the native list keeps its layout. */
 ul[data-mrflow-board] > li[data-mrflow-column] .issuable-meta {
   max-width: none !important;
+  margin-top: var(--gl-spacing-scale-3, 0.5rem);
 }
 
 /* An item sliding to another column travels above the others */
