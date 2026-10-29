@@ -49,14 +49,27 @@ export function listPage(projectPath: string, iids: number[], { redirect = false
       <main><ul class="content-list issuable-list issues-list">${items}</ul></main>${rerender}</body></html>`;
 }
 
-export function mrPage(): string {
+// The MR widget: approvals as approvals.vue renders them inside state_container.vue, then the merge section.
+// Without `canApprove` there is no approve button, as on your own MR.
+export function mrPage({ canApprove = true } = {}): string {
+  const approve = canApprove
+    ? `<button class="btn btn-confirm btn-sm gl-button" data-testid="approve-button">Approve</button>`
+    : "";
   return `<!doctype html><html><head><meta name="csrf-token" content="e2e-token"><title>Merge request</title></head>
     <body><svg hidden><use href="${SPRITE}#home"></use></svg>
       <div id="widget-state" class="mr-state-widget">
         <div class="js-mr-approvals mr-section-container">
-          <div class="state-container"><div class="gl-flex gl-flex-col">
-            <div class="gl-flex"><button class="btn btn-confirm" data-testid="approve-button">Approve</button><div>Requires 2 approvals</div></div>
-          </div></div>
+          <div class="mr-widget-body media gl-flex gl-items-center">
+            <div class="gl-mr-3 gl-flex gl-h-6 gl-w-6"></div>
+            <div class="gl-flex gl-w-full">
+              <div class="media-body gl-leading-normal">
+                <div class="gl-flex gl-flex-col">
+                  <div class="gl-flex gl-flex-col gl-gap-3">${approve}<div data-testid="approvals-summary-content">Requires 2 approvals</div></div>
+                </div>
+              </div>
+              <div class="gl-border-l"><button class="btn btn-default btn-icon" data-testid="widget-toggle">Collapse</button></div>
+            </div>
+          </div>
         </div>
         <div class="mr-section-container">
           <div class="mr-widget-section" data-testid="mr-widget-content">

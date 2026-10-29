@@ -26,6 +26,22 @@ test("the checklist hides Approve and Merge until every check is ticked", async 
   await expect(approve).toBeVisible();
 });
 
+test("without an approve button the checklist still guards Merge and leaves the widget's own buttons", async ({
+  page,
+  gitlab,
+}) => {
+  gitlab.canApprove = false;
+  await page.goto(MR);
+  const merge = page.locator(".mr-widget-body-ready-merge");
+  await expect(page.locator(".media-body .mrflow-checks")).toBeVisible();
+  await expect(merge).toBeHidden();
+  await expect(page.getByTestId("widget-toggle")).toBeVisible();
+
+  await page.getByLabel("Is documentation updated?").check();
+  await page.getByLabel("Is merge target right?").check();
+  await expect(merge).toBeVisible();
+});
+
 test("the checklist can be turned off", async ({ page, setStorage }) => {
   await setStorage({ settings: { version: 2, approvalGuard: false } });
   await page.goto(MR);

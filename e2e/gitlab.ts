@@ -30,6 +30,7 @@ export class MockGitLab {
   // Answer GraphQL with 429 and this Retry-After (seconds)
   rateLimitedFor: number | null = null;
   redirectList = false;
+  canApprove = true;
 
   constructor(
     readonly projectPath = "group/project",
@@ -118,7 +119,7 @@ export class MockGitLab {
 
     const mrPageMatch = path.match(/\/-\/merge_requests\/(\d+)/);
     const html = mrPageMatch
-      ? mrPage()
+      ? mrPage({ canApprove: this.canApprove })
       : listPage(this.projectPath, [...this.mrs.keys()], { redirect: this.redirectList });
     return route.fulfill({ contentType: "text/html", body: html });
   }
