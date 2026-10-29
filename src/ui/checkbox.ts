@@ -6,11 +6,12 @@ export function checkbox(
   {
     id = `mrflow-checkbox-${++nextId}`,
     checked = false,
+    className = "",
     onChange,
-  }: { id?: string; checked?: boolean; onChange?: (checked: boolean) => void } = {},
+  }: { id?: string; checked?: boolean; className?: string; onChange?: (checked: boolean) => void } = {},
 ): { root: HTMLDivElement; input: HTMLInputElement } {
   const root = document.createElement("div");
-  root.className = "gl-form-checkbox custom-control custom-checkbox";
+  root.className = `gl-form-checkbox custom-control custom-checkbox ${className}`.trim();
 
   const input = document.createElement("input");
   input.type = "checkbox";

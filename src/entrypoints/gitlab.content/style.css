@@ -140,7 +140,3 @@ span.badge-pill:has(+ span.badge-pill) {
 .mrflow-hidden {
   display: none !important;
 }
-
-.mrflow-approve-row {
-  height: 32px;
-}

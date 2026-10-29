@@ -34,34 +34,31 @@ export const approvalGuardFeature: Feature<MrPageRoute> = {
       },
       { timeout: APPROVALS_WIDGET_TIMEOUT_MS, signal: ctx.signal },
     );
-    const container = found?.bar.parentElement;
-    if (!found || !container || container.querySelector(".mrflow-checks")) return;
-    const { button, merge } = found;
+    if (!found || found.content.querySelector(".mrflow-checks")) return;
+    const { content, button, merge } = found;
 
+    // Without an approve button (own MR, no permission) the checklist still guards Merge
     const updateVisibility = () => {
       const allChecked = isConditionsChecked(mrPath);
       // Keep "Revoke approval" reachable
-      button.classList.toggle(HIDDEN, !allChecked && !hasUserApproved && !isRevokeApprovalButton(button));
+      button?.classList.toggle(HIDDEN, !allChecked && !hasUserApproved && !isRevokeApprovalButton(button));
       merge.classList.toggle(HIDDEN, !allChecked);
     };
-    // Keeps the row's height when the button is hidden
-    button.parentElement?.classList.add("mrflow-approve-row");
     updateVisibility();
 
     // gl-z-1 lifts the checklist above GitLab's accessibility overlays
     const checks = document.createElement("div");
-    checks.className = "mrflow-checks gl-z-1 gl-w-full gl-mb-3";
+    checks.className = "mrflow-checks gl-z-1 gl-mb-4 gl-flex gl-flex-col gl-gap-3";
     const heading = document.createElement("p");
-    heading.className = "gl-font-semibold gl-mb-2";
+    heading.className = "gl-font-bold gl-m-0";
     heading.textContent = "Check following conditions to approve:";
     checks.appendChild(heading);
     CHECKS.forEach(({ id, text }) => checks.appendChild(createCheck(mrPath, id, text, updateVisibility)));
 
-    container.insertBefore(checks, container.firstChild);
+    content.insertBefore(checks, content.firstChild);
     ctx.onCleanup(() => {
       checks.remove();
-      button.parentElement?.classList.remove("mrflow-approve-row");
-      button.classList.remove(HIDDEN);
+      button?.classList.remove(HIDDEN);
       merge.classList.remove(HIDDEN);
     });
   },

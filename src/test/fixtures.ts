@@ -31,19 +31,37 @@ export function mrList(count: number, options = {}): string {
   return `${SPRITE}<div id="app"><ul class="content-list issuable-list">${items}</ul></div>`;
 }
 
-export function mrPage({ revoke = false, legacy = false } = {}): string {
-  const button = legacy
-    ? `<button class="btn">${revoke ? "Revoke approval" : "Approve"}</button>`
-    : `<button class="btn ${revoke ? "btn-default" : "btn-confirm"}" data-testid="approve-button">${revoke ? "Revoke approval" : "Approve"}</button>`;
+// The approvals widget as approvals.vue renders it inside state_container.vue (`legacy`: older markup
+// without the state container and test ids), and the merge section of merge_widget.vue
+export function mrPage({ revoke = false, legacy = false, canApprove = true, loading = false } = {}): string {
+  const label = revoke ? "Revoke approval" : "Approve";
+  const approvals = legacy
+    ? `<div class="state-container">
+        <div class="gl-flex gl-flex-col">
+          <div class="gl-flex gl-flex-col gl-gap-3"><button class="btn">${label}</button><div>Approval is optional</div></div>
+        </div>
+      </div>`
+    : `<div class="mr-widget-body media gl-flex gl-items-center">
+        ${
+          loading
+            ? `<div class="mr-state-loader gl-w-full">Checking approval status</div>`
+            : `<div class="gl-mr-3 gl-flex gl-h-6 gl-w-6"></div>
+              <div class="gl-flex gl-w-full">
+                <div class="media-body gl-leading-normal">
+                  <div class="gl-flex gl-flex-col">
+                    <div class="gl-flex gl-flex-col gl-gap-3">
+                      ${canApprove ? `<button class="btn ${revoke ? "btn-default" : "btn-confirm"}" data-testid="approve-button">${label}</button>` : ""}
+                      <div data-testid="approvals-summary-content">Approved by</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="gl-border-l"><button class="btn btn-default btn-icon" data-testid="widget-toggle">Collapse</button></div>
+              </div>`
+        }
+      </div>`;
   return `${SPRITE}
     <div id="widget-state" class="mr-state-widget">
-      <div class="js-mr-approvals mr-section-container">
-        <div class="state-container">
-          <div class="gl-flex gl-flex-col">
-            <div class="gl-flex gl-flex-col gl-gap-3">${button}<div class="approvals-summary">Approval is optional</div></div>
-          </div>
-        </div>
-      </div>
+      <div class="js-mr-approvals mr-section-container">${approvals}</div>
       <div class="mr-section-container">
         <div class="mr-widget-section" data-testid="mr-widget-content">
           <div data-testid="ready_to_merge_state">

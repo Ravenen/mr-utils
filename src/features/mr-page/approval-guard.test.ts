@@ -42,6 +42,19 @@ describe("approval guard", () => {
     });
   });
 
+  it("guards Merge and sits above the approvals when the user cannot approve", async () => {
+    document.body.innerHTML = mrPage({ canApprove: false });
+    await mount();
+    const checks = document.querySelector(".mrflow-checks");
+    expect(checks?.parentElement?.parentElement?.classList.contains("media-body")).toBe(true);
+    expect(checks?.nextElementSibling?.querySelector("[data-testid='approvals-summary-content']")).not.toBeNull();
+    expect(hidden(document.querySelector("[data-testid='widget-toggle']"))).toBe(false);
+    expect(hidden(merge())).toBe(true);
+    tick("docs_check");
+    tick("branch_check");
+    expect(hidden(merge())).toBe(false);
+  });
+
   it("keeps Revoke approval reachable", async () => {
     await mount({ revoke: true });
     expect(hidden(approve())).toBe(false);

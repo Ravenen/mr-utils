@@ -40,12 +40,26 @@ describe("MR list", () => {
 });
 
 describe("MR page", () => {
-  it("finds the approvals widget and the merge section", () => {
+  it("finds the approvals widget's content, its approve button and the merge section", () => {
     document.body.innerHTML = mrPage();
     const widget = approvalsWidget();
-    expect(widget?.button.textContent).toBe("Approve");
-    expect(widget?.bar.classList.contains("gl-flex-col")).toBe(true);
+    expect(widget?.button?.textContent).toBe("Approve");
+    expect(widget?.content.parentElement?.classList.contains("media-body")).toBe(true);
     expect(mergeSection()?.querySelector("[data-testid='mr-widget-content']")).not.toBeNull();
+  });
+
+  it("finds the widget without an approve button, and never takes its collapse button", () => {
+    document.body.innerHTML = mrPage({ canApprove: false });
+    const widget = approvalsWidget();
+    expect(widget?.button).toBeNull();
+    expect(widget?.content.parentElement?.classList.contains("media-body")).toBe(true);
+  });
+
+  it("waits while the approvals widget is loading", () => {
+    document.body.innerHTML = mrPage({ loading: true });
+    expect(approvalsWidget()).toBeNull();
+    document.body.innerHTML = `<div class="js-mr-approvals">Checking approval status <button>Expand</button></div>`;
+    expect(approvalsWidget()).toBeNull();
   });
 
   it("tells Approve from Revoke approval without reading the text", () => {
@@ -59,12 +73,8 @@ describe("MR page", () => {
 
   it("falls back to the older markup", () => {
     document.body.innerHTML = mrPage({ legacy: true, revoke: true });
-    const button = approvalsWidget()?.button as Element;
-    expect(isRevokeApprovalButton(button)).toBe(true);
-  });
-
-  it("waits while the approvals widget is loading", () => {
-    document.body.innerHTML = `<div class="js-mr-approvals">Checking approval status <button>Expand</button></div>`;
-    expect(approvalsWidget()).toBeNull();
+    const widget = approvalsWidget();
+    expect(isRevokeApprovalButton(widget?.button as Element)).toBe(true);
+    expect(widget?.content.classList.contains("state-container")).toBe(true);
   });
 });

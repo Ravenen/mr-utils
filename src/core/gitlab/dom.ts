@@ -57,22 +57,31 @@ export function itemApprovals(controls: Element): HTMLElement | null {
 // == MR page ==
 
 export interface ApprovalsWidget {
-  // The row with the Approve / Revoke approval button; our checklist goes before it
-  bar: HTMLElement;
-  button: HTMLButtonElement;
+  // Where the checklist goes: the start of the widget's content, above the approve row
+  content: HTMLElement;
+  // Approve / Revoke approval; null when the user cannot approve (own MR, no permission)
+  button: HTMLButtonElement | null;
 }
 
-// The approvals widget once it is loaded: null while it shows "Checking approval status" and when
-// the user has no approve button (own MR, merged MR, no permission)
+// The approvals widget once it is loaded; null while it loads
 export function approvalsWidget(doc: Document = document): ApprovalsWidget | null {
   const widget = doc.querySelector(".js-mr-approvals");
   if (!widget) return null;
-  const button =
-    widget.querySelector<HTMLButtonElement>("button[data-testid='approve-button']") ??
-    // Older markup: the first button, and the widget says when it is still loading
-    (widget.textContent?.includes("Checking approval status") ? null : widget.querySelector("button"));
-  const bar = button?.parentElement?.parentElement;
-  return button && bar ? { bar, button } : null;
+  const button = widget.querySelector<HTMLButtonElement>("button[data-testid='approve-button']");
+
+  // Current markup (state_container.vue): a loader while loading, then the content in .media-body
+  const body = widget.querySelector(".mr-widget-body");
+  if (body?.querySelector(".media-body")) {
+    if (body.querySelector(".mr-state-loader")) return null;
+    const content = body.querySelector<HTMLElement>(".media-body > *");
+    return content ? { content, button } : null;
+  }
+
+  // Older markup: the first button is Approve, and the widget says when it is still loading
+  if (widget.textContent?.includes("Checking approval status")) return null;
+  const legacyButton = button ?? widget.querySelector("button");
+  const content = legacyButton?.parentElement?.parentElement?.parentElement;
+  return legacyButton && content ? { content, button: legacyButton } : null;
 }
 
 // "Revoke approval" uses the default variant, "Approve" the confirm one; the text check covers older markup
