@@ -1,84 +1,159 @@
-/* Kanban Board Styles for GitLab MR Utils */
+/* MRFlow styles injected into GitLab pages. GitLab colors only (--gl-* tokens), so dark mode works. */
 
-/* Board layout */
-.kanban-board {
-  display: flex;
-  gap: 16px;
+/* == Kanban: the native MR list laid out as three columns (features/mr-list/board.ts) == */
+
+.mrflow-board-header,
+ul[data-mrflow-board] {
+  --mrflow-gap: 16px;
+  --mrflow-column: calc((100% - 2 * var(--mrflow-gap)) / 3);
+  --mrflow-column-background: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
+  --mrflow-column-border: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
+}
+
+.mrflow-board-header {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--mrflow-gap);
   margin-top: 16px;
 }
 
-/* Kanban columns */
-.kanban-column {
-  flex: 1;
-  border-style: solid;
-  border-radius: 0.25rem;
-  border-width: 1px;
-  border-color: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
-  background-color: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
-}
-
-/* Column header */
-.kanban-column-header {
+.mrflow-column-header {
   padding: 10px;
+  border: 1px solid var(--mrflow-column-border);
+  border-bottom: 0;
+  border-radius: 0.25rem 0.25rem 0 0;
   background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
-  color: var(--gl-text-color);
+  color: var(--gl-text-color-heading, var(--gl-text-color));
   font-weight: bold;
   text-align: center;
-  border-radius: 0.25rem 0.25rem 0 0;
 }
 
-/* Column body */
-.kanban-column-body {
-  display: flex;
-  flex-direction: column;
-  padding: 10px !important;
+.mrflow-column-count {
+  color: var(--gl-text-color-subtle);
 }
 
-/* MR card styling */
-.mr-card {
+/* Each column stacks its items: rows are 4px and an item spans as many as its height needs
+   (data-mrflow-span, rules generated in board.ts); dense placement fills every column from the top */
+ul[data-mrflow-board] {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 4px;
+  grid-auto-flow: row dense;
+  column-gap: var(--mrflow-gap);
+  padding: 10px 0 !important;
+  border: 0 !important;
+  background-image: linear-gradient(
+    to right,
+    var(--mrflow-column-background) 0 var(--mrflow-column),
+    transparent var(--mrflow-column) calc(var(--mrflow-column) + var(--mrflow-gap)),
+    var(--mrflow-column-background) calc(var(--mrflow-column) + var(--mrflow-gap))
+      calc(2 * var(--mrflow-column) + var(--mrflow-gap)),
+    transparent calc(2 * var(--mrflow-column) + var(--mrflow-gap))
+      calc(2 * var(--mrflow-column) + 2 * var(--mrflow-gap)),
+    var(--mrflow-column-background) calc(2 * var(--mrflow-column) + 2 * var(--mrflow-gap)) 100%
+  );
+}
+
+/* Anything else GitLab puts in the list (loaders, empty states) has no column */
+ul[data-mrflow-board] > li:not([data-mrflow-column]) {
+  display: none !important;
+}
+
+ul[data-mrflow-board] > li[data-mrflow-column] {
   display: block !important;
-  margin-bottom: 10px !important;
-  border-style: solid !important;
+  align-self: start;
+  margin: 0 10px !important;
+  border: 1px solid var(--gl-border-color-default) !important;
   border-radius: 0.5rem !important;
-  border-width: 1px !important;
-  border-color: var(--gl-border-color-default) !important;
   background-color: var(--gl-background-color-default) !important;
 }
 
-.mr-ready {
-  box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
-  border-color: var(--gl-badge-success-text-color-default) !important;
+ul[data-mrflow-board] > [data-mrflow-column="review"] {
+  grid-column: 1;
 }
 
-/* Card sliding to another column (see animateCardMoves) */
-.mr-card.mrflow-card-moving {
+ul[data-mrflow-board] > [data-mrflow-column="pending"] {
+  grid-column: 2;
+}
+
+ul[data-mrflow-board] > [data-mrflow-column="approved"] {
+  grid-column: 3;
+}
+
+/* The item's meta (badges, approvals) goes under its title instead of beside it */
+ul[data-mrflow-board] > li[data-mrflow-column] .issuable-meta {
+  max-width: none !important;
+}
+
+/* An item sliding to another column travels above the others */
+ul[data-mrflow-board] > [data-mrflow-moving] {
   position: relative;
   z-index: 2;
   box-shadow: 0 4px 12px var(--gl-shadow-color-default, rgba(5, 5, 6, 0.16));
 }
 
-/* Info container in MR card */
-.mr-card > .issuable-info-container {
-  display: block !important;
+/* == MR items, on the board and in the native list (features/mr-list/decorate.ts) == */
+
+/* Ready to merge */
+[data-mrflow-ready] {
+  box-shadow: 0 0 6px 1px var(--gl-badge-success-background-color-default);
+  border-color: var(--gl-badge-success-text-color-default) !important;
 }
 
-/* Controls margin */
-.mr-card > div > div > ul.controls {
-  margin-top: 20px;
+/* Draft: dimmed until hovered */
+[data-mrflow-draft] > div {
+  opacity: 0.3;
+  filter: grayscale(1);
+  transition:
+    opacity 0.15s ease,
+    filter 0.15s ease;
 }
 
-/* Badges container */
-.kanban-badges {
+[data-mrflow-draft]:hover > div {
+  opacity: 1;
+  filter: none;
+}
+
+/* Approved by me, in the native list (board off). Success feedback color: green-50 light, green-900 dark */
+[data-mrflow-approved] {
+  background-color: var(--gl-feedback-success-background-color, rgba(0, 149, 0, 0.1)) !important;
+}
+
+/* The native comments count, replaced by the thread badges */
+[data-mrflow-replaced] {
+  display: none !important;
+}
+
+.mrflow-badges {
   display: flex;
 }
 
-/* Banners container */
-.kanban-banners {
-  margin: 5px 0px;
+/* Thread badges joined into one pill */
+.mrflow-badges > .badge-pill + .badge-pill {
+  border-top-left-radius: 2rem !important;
+  border-bottom-left-radius: 2rem !important;
+  margin-left: 2px !important;
 }
 
-/* Banner badge spacing */
-.kanban-banners > .badge {
+.mrflow-badges > .badge-pill:has(+ .badge-pill) {
+  border-top-right-radius: 2rem !important;
+  border-bottom-right-radius: 2rem !important;
+}
+
+[data-testid="mr-approvals"]:has(> .mrflow-approvals-badge) {
+  display: flex !important;
+  align-items: center;
+}
+
+.mrflow-approvals-badge {
+  margin-left: 2px;
+}
+
+.mrflow-banners {
+  margin: 5px 0;
+}
+
+.mrflow-banners > .badge {
   margin-right: 5px;
 }
 
@@ -91,50 +166,7 @@
   fill: currentColor;
 }
 
-/* Badge pill right spacing */
-span.badge-pill + span.badge-pill {
-  border-top-left-radius: 2rem !important;
-  border-bottom-left-radius: 2rem !important;
-  margin-left: 2px !important;
-}
-
-/* Badge pill left spacing */
-span.badge-pill:has(+ span.badge-pill) {
-  border-top-right-radius: 2rem !important;
-  border-bottom-right-radius: 2rem !important;
-  margin-left: 2px !important;
-}
-
-/* Dimmed (draft) MR */
-.dimmed > div {
-  opacity: 0.3;
-  filter: grayscale(1);
-  transition:
-    opacity 0.15s ease,
-    filter 0.15s ease;
-}
-
-.dimmed:hover > div {
-  opacity: 1;
-  filter: none;
-}
-
-/* Approved MR highlight in the native list (board off). Success feedback color: green-50 light, green-900 dark */
-.greened {
-  background-color: var(--gl-feedback-success-background-color, rgba(0, 149, 0, 0.1)) !important;
-}
-
-/* Column count */
-.kanban-count {
-  color: var(--gl-text-color-subtle);
-}
-
-/* Native MR list moved off screen under the board: GitLab keeps rendering it, cards are cloned from it */
-.mrflow-offscreen {
-  visibility: hidden;
-  position: absolute;
-  left: -9999px;
-}
+/* == MR page: approval guard (features/mr-page/approval-guard.ts) == */
 
 /* Approve button / merge section hidden until every check is ticked */
 .mrflow-hidden {

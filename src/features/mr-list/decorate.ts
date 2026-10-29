@@ -1,39 +1,49 @@
+import { itemApprovals, itemCommentsBadge, itemControls, itemMainInfo } from "@/core/gitlab/dom";
 import type { MrData } from "@/core/gitlab/merge-requests";
 import { readMrState } from "@/core/storage/mr-state";
-import { itemApprovals, itemCommentsBadge, itemControls, itemMainInfo } from "@/core/gitlab/dom";
 import { actionBanner, badge, banner } from "@/ui/badge";
 import { prependIcon } from "@/ui/icons";
 
-// Everything decorate() adds to an MR item, for cleaning up native items in list view
-export const DECORATION_SELECTOR = ".kanban-badges, .kanban-banners, .mrflow-approvals-badge";
-export const DECORATION_CLASSES = ["dimmed", "mr-ready", "greened"];
+// GitLab's Vue rewrites `class` on re-render, so state on native items lives in data attributes
+const FLAGS = ["mrflowDraft", "mrflowReady", "mrflowApproved"] as const;
+const ADDED = ".mrflow-badges, .mrflow-banners, .mrflow-approvals-badge";
 
-// Decorate an MR element (a board card, or the native item in list view)
-export function decorateMergeRequest(mrElement: Element, mrData: MrData, { showSeenBanners = false } = {}): void {
+// Decorate a native MR item. Idempotent: replaces what an earlier call added.
+export function decorateMergeRequest(
+  mrElement: HTMLElement,
+  mrData: MrData,
+  { showSeenBanners = false, highlightApproved = false } = {},
+): void {
+  clearDecorations(mrElement);
   addBadges(mrElement, mrData);
   addBanners(mrElement, mrData, showSeenBanners);
-  if (mrData.isDraft) mrElement.classList.add("dimmed");
-  if (mrData.isReady) mrElement.classList.add("mr-ready");
+  if (mrData.isDraft) mrElement.dataset.mrflowDraft = "";
+  if (mrData.isReady) mrElement.dataset.mrflowReady = "";
+  if (highlightApproved && mrData.hasUserApproved && !mrData.isDraft) mrElement.dataset.mrflowApproved = "";
+}
+
+// Remove everything decorateMergeRequest added and show the native comments count again
+export function clearDecorations(mrElement: HTMLElement): void {
+  mrElement.querySelectorAll(ADDED).forEach((el) => el.remove());
+  mrElement.querySelectorAll<HTMLElement>("[data-mrflow-replaced]").forEach((el) => delete el.dataset.mrflowReplaced);
+  FLAGS.forEach((flag) => delete mrElement.dataset[flag]);
 }
 
 function addBadges(mrElement: Element, mrData: MrData) {
-  const controlsContainer = itemControls(mrElement);
-  if (!controlsContainer) return;
+  const controls = itemControls(mrElement);
+  if (!controls) return;
 
-  // Threads badges
+  // Threads badges, in place of the native comments count. The native element is hidden, not removed:
+  // it belongs to GitLab's Vue, which fails to patch nodes taken from under it.
   if (mrData.totalThreads > 0) {
-    let threadsBadgesContainer = controlsContainer.querySelector(".kanban-badges");
-    if (!threadsBadgesContainer) {
-      threadsBadgesContainer = document.createElement("div");
-      threadsBadgesContainer.classList.add("kanban-badges");
-      controlsContainer.appendChild(threadsBadgesContainer);
-    }
+    const container = document.createElement("div");
+    container.className = "mrflow-badges";
     const threadsBadge = badge(
       `${mrData.totalThreads - mrData.unresolvedThreads}/${mrData.totalThreads}`,
       "Total threads",
       mrData.unresolvedThreads === 0 ? "success" : "danger",
     );
-    threadsBadgesContainer.appendChild(threadsBadge);
+    container.appendChild(threadsBadge);
     prependIcon(threadsBadge, "comments");
 
     if (mrData.totalUserThreads > 0) {
@@ -42,15 +52,16 @@ function addBadges(mrElement: Element, mrData: MrData) {
         "Your threads",
         mrData.unresolvedUserThreads === 0 ? "success" : "danger",
       );
-      threadsBadgesContainer.appendChild(userThreadsBadge);
+      container.appendChild(userThreadsBadge);
       prependIcon(userThreadsBadge, "comment-dots");
     }
 
-    // Replace the native comments badge if present
-    const nativeCommentsBadge = itemCommentsBadge(controlsContainer);
-    if (nativeCommentsBadge) {
-      nativeCommentsBadge.insertAdjacentElement("afterend", threadsBadgesContainer);
-      nativeCommentsBadge.remove();
+    const nativeComments = itemCommentsBadge(controls);
+    if (nativeComments) {
+      nativeComments.dataset.mrflowReplaced = "";
+      nativeComments.insertAdjacentElement("afterend", container);
+    } else {
+      controls.appendChild(container);
     }
   }
 
@@ -61,11 +72,7 @@ function addBadges(mrElement: Element, mrData: MrData) {
     mrData.approvalsGiven >= mrData.approvalsRequired ? "success" : "danger",
   );
   approvalsBadge.classList.add("mrflow-approvals-badge");
-  const nativeApprovalBadge = itemApprovals(controlsContainer);
-  if (nativeApprovalBadge) {
-    nativeApprovalBadge.classList.add("gl-flex");
-    nativeApprovalBadge.appendChild(approvalsBadge);
-  }
+  itemApprovals(controls)?.appendChild(approvalsBadge);
 }
 
 // Banners: actions needed (CONFLICTS/NEEDS REBASE) and news since last visit
@@ -97,11 +104,8 @@ function addBanners(mrElement: Element, mrData: MrData, showSeenBanners: boolean
   }
   if (banners.length === 0) return;
 
-  let bannersContainer = infoContainer.querySelector(".kanban-banners");
-  if (!bannersContainer) {
-    bannersContainer = document.createElement("div");
-    bannersContainer.classList.add("kanban-banners");
-    infoContainer.insertBefore(bannersContainer, infoContainer.firstChild);
-  }
-  banners.forEach((banner) => bannersContainer.appendChild(banner));
+  const container = document.createElement("div");
+  container.className = "mrflow-banners";
+  banners.forEach((el) => container.appendChild(el));
+  infoContainer.insertBefore(container, infoContainer.firstChild);
 }
