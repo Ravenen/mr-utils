@@ -209,6 +209,18 @@ interface ChecklistItem {
 - Стан у `storage.local`: `projectId:iid → {hunkHash: timestamp}` з TTL і очищенням змерджених MR.
 - **Ризики**: diffs у GitLab віртуалізовані (вузли з'являються й зникають при скролі), і зараз на них переходять на Rapid Diffs. Потрібні адаптер під обидва варіанти й MutationObserver. Окремо врахувати режими inline і side-by-side, а також «Show whitespace changes». Тому ця фіча йде після рефактору.
 
+**Обраний підхід (дослідження #16):**
+- **Два рендери, одна модель.** `diffFiles()` у `src/core/gitlab/dom.ts` читає обидва в `{ path, oldPath, viewed, hunks: [{ header, rows, blocks }] }`:
+  - Rapid Diffs (серверний HTML, на gitlab.com уже за замовчуванням): `diff-file[data-testid=rd-diff-file]`, шляхи з `data-file-data` (`old_path`, `new_path`), рядки `tr[data-hunk-header]` / `tr[data-hunk-lines]`, зміни `td.rd-line-content[data-change=added|removed]`, текст у `pre.rd-line-text`. Кожен hunk у своєму `<tbody>`; останній `<tbody>` має лише заголовок для розгортання кінця файлу, без змін.
+  - Vue diffs (`diff_file.vue`, `diff_view.vue`, `diff_row.vue`): `.diff-file.file-holder[data-path]`, рядки `.line_holder` (і в сітці `.diff-grid-row`, і в старій таблиці), заголовок hunk `.line_holder.match`, зміни `.line_content.new|.old`. `rich_text` уже без маркера `+`/`-`.
+  - Inline і side-by-side дають однакову модель: у кожному блоці змін спершу видалені рядки, потім додані.
+- **Заголовка немає у hunk на початку файлу** (GitLab не показує `@@`, коли hunk починається з першого рядка). Для нього додаємо свій рядок `.mrflow-hunk-header` перед першим рядком hunk (`<tr>` у таблиці Rapid Diffs, `<div>` у сітці Vue). В інших hunk галочка стоїть у нативному рядку `@@` (позиціюється абсолютно, сітку рядка не змінює).
+- **Вміст hunk беремо з DOM, а не з API.** Рядки вже на сторінці, тож 0 запитів; `/diffs.json` чи GraphQL дали б ще запити на кожен файл і розійшлися б з тим, що бачить користувач (розгорнутий контекст, «Show whitespace changes»).
+- **Ідентифікатор (для #17)** рахуємо по **блоках змін** (підряд змінені рядки без контексту між ними), а hunk вважається переглянутим, коли переглянуті всі його блоки. Так позначки переживають зміну контексту довкола, розгортання рядків (GitLab тоді зливає сусідні hunk в один) і перемикання inline / side-by-side.
+- **Віртуалізація.** Vue diffs монтує і прибирає файли при скролі (`vue-virtual-scroller`), Rapid Diffs підвантажує файли потоком і ховає їх через `content-visibility`. Один `MutationObserver` на `document.body` з одним проходом за кадр повертає галочки туди, де їх немає; прохід ідемпотентний.
+- **Нативна галочка файлу:** Vue — `[data-testid=fileReviewCheckbox]` (на `<input>` або на обгортці), Rapid Diffs — `input[data-viewed-checkbox]` (неактивна, доки скрипт GitLab не змонтує файл). Ставимо і знімаємо її кліком, щоб GitLab зберіг стан і згорнув файл, як зазвичай.
+- **Гарячі клавіші (для #18):** `]` / `[` у GitLab уже зайняті (наступний і попередній файл, `j` / `k` теж), `n` / `p` — наступний і попередній тред. Беремо `Shift+]` / `Shift+[` (за `event.code`, щоб працювало на будь-якій розкладці).
+
 ### 5.4 Бейдж «Потребує ребейсу»
 
 - Дані: GraphQL `shouldBeRebased` або `detailedMergeStatus == NEED_REBASE` і `conflicts`, плюс REST `diverged_commits_count` для «відстає на N комітів».
@@ -305,7 +317,7 @@ interface ChecklistItem {
 - [x] E2E-тести на фікстурах — #10
 
 ### Milestone 2.1: hunk review — епік #12
-- [ ] Прототип на поточному diffs DOM і на Rapid Diffs — #16
+- [x] Прототип на поточному diffs DOM і на Rapid Diffs — #16
 - [ ] Хешування hunk, збереження, прогрес, синхронізація з нативним «Viewed» — #17
 - [ ] Навігація до наступного непереглянутого — #18
 

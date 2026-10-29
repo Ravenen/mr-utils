@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
+import { diffFilesMarkup, SAMPLE_DIFF } from "@/test/diffs-markup";
 import { mrList, mrPage } from "@/test/fixtures";
 import {
   approvalsWidget,
+  diffFiles,
+  type DiffFile,
   iconSpriteUrl,
   isRevokeApprovalButton,
   itemCommentsBadge,
@@ -77,5 +80,68 @@ describe("MR page", () => {
     const widget = approvalsWidget();
     expect(isRevokeApprovalButton(widget?.button as Element)).toBe(true);
     expect(widget?.content.classList.contains("state-container")).toBe(true);
+  });
+});
+
+describe("MR changes", () => {
+  const blocks = (file: DiffFile) =>
+    file.hunks.map((hunk) => hunk.blocks.map((b) => b.map((l) => l.change[0] + l.text)));
+  const SAMPLE_BLOCKS = [
+    [["rimport { old } from './old';", "aimport { spinner } from './spinner';"]],
+    [["r  render(columns);", "a  render(columns, { animate });", "a  observe(columns);"], ["a  // done"]],
+  ];
+
+  for (const renderer of ["vue", "rapid"] as const) {
+    for (const view of ["inline", "parallel"] as const) {
+      it(`reads files, hunks and changed lines (${renderer}, ${view})`, () => {
+        document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { renderer, view });
+        const files = diffFiles();
+        expect(files.map((file) => file.path)).toEqual(["src/board.ts", "README.md"]);
+        const [board] = files as [DiffFile];
+        expect(board.hunks).toHaveLength(2);
+        // The top hunk has no header row; the next one starts at its "@@" row
+        expect(board.hunks[0]?.header).toBeNull();
+        expect(board.hunks[1]?.header?.textContent).toContain("@@ -20,6 +20,8 @@");
+        expect(blocks(board)).toEqual(SAMPLE_BLOCKS);
+        expect(board.hunks[0]?.rows).toHaveLength(view === "inline" ? 4 : 3);
+        expect(board.viewed?.type).toBe("checkbox");
+      });
+    }
+  }
+
+  it("skips the last header, which only expands the rest of the file", () => {
+    document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { renderer: "rapid" });
+    expect(diffFiles()[1]?.hunks).toHaveLength(1);
+  });
+
+  it("takes the old path of a renamed file in Rapid Diffs", () => {
+    document.body.innerHTML = diffFilesMarkup([{ ...SAMPLE_DIFF[1]!, path: "docs/README.md", oldPath: "README.md" }], {
+      renderer: "rapid",
+    });
+    expect(diffFiles()[0]).toMatchObject({ path: "docs/README.md", oldPath: "README.md" });
+  });
+
+  it("has no Viewed checkbox when reviews are off", () => {
+    document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { reviews: false });
+    expect(diffFiles()[0]?.viewed).toBeNull();
+  });
+
+  it("finds the Viewed checkbox when its test id is on the wrapper", () => {
+    document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF);
+    const input = document.querySelector("[data-testid='fileReviewCheckbox']") as HTMLElement;
+    input.removeAttribute("data-testid");
+    input.parentElement?.setAttribute("data-testid", "fileReviewCheckbox");
+    expect(diffFiles()[0]?.viewed).toBe(input);
+  });
+
+  it("reads lines of the older table markup", () => {
+    document.body.innerHTML = `<div class="diff-file file-holder" data-path="a.rb"><div class="diff-content"><table><tbody>
+      <tr class="line_holder match"><td class="line_content match">@@ -1 +1 @@</td></tr>
+      <tr class="line_holder"><td class="line_content old">a = 1</td></tr>
+      <tr class="line_holder"><td class="line_content new">a = 2</td></tr>
+      <tr class="notes_holder"><td class="notes-content old">A comment</td></tr>
+      <tr class="line_holder"><td class="line_content">b = 1</td></tr>
+    </tbody></table></div></div>`;
+    expect(blocks(diffFiles()[0] as DiffFile)).toEqual([[["ra = 1", "aa = 2"]]]);
   });
 });

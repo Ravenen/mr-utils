@@ -18,6 +18,9 @@ Browser extension that makes GitLab merge requests easier to review. Works on gi
 - A checklist you must tick before the **Approve** and **Merge** buttons appear.
 - Checks reset automatically when new commits are pushed (can be turned off).
 
+**Changes tab**
+- A **Viewed** checkbox on every hunk, not only on the whole file. Works with both GitLab diff renderers (Rapid Diffs and the older one), inline and side by side.
+
 ## Install
 
 - Firefox: [addons.mozilla.org](https://addons.mozilla.org/) (search for "MRFlow")
@@ -37,10 +40,11 @@ Disable the store version while testing, otherwise both run on the page.
 
 ## Settings
 
-The extension icon opens a short panel to turn the Kanban board and the approval checklist on or off. **All settings** opens the options page:
+The extension icon opens a short panel to turn the Kanban board, the approval checklist and hunk review on or off. **All settings** opens the options page:
 - **Required approvals**: from the project's approval rules (Premium), or always a fixed number; the number is also used for projects without rules.
 - **Kanban board**, **Board updates** (in waves, the default, or each card as soon as it loads) and **Animate cards moving between columns** (also off when the system asks for reduced motion).
 - **Approval checklist** and **Reset checks on new commits**.
+- **Hunk review**.
 - **Export / Import** settings as JSON.
 
 Changes apply to open GitLab tabs right away. Settings from MRFlow 1.x are migrated on the first start.

@@ -14,6 +14,8 @@ export interface Settings {
   animateCards: boolean;
   approvalGuard: boolean;
   resetChecksOnNewCommits: boolean;
+  // "Viewed" checkboxes on the hunks of the Changes tab
+  hunkReview: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   animateCards: true,
   approvalGuard: true,
   resetChecksOnNewCommits: true,
+  hunkReview: true,
 };
 
 // Keys MRFlow 1.x kept at the top level of storage.sync
@@ -45,6 +48,7 @@ export function normalizeSettings(raw: unknown): Settings {
     animateCards: bool(value.animateCards, DEFAULT_SETTINGS.animateCards),
     approvalGuard: bool(value.approvalGuard, DEFAULT_SETTINGS.approvalGuard),
     resetChecksOnNewCommits: bool(value.resetChecksOnNewCommits, DEFAULT_SETTINGS.resetChecksOnNewCommits),
+    hunkReview: bool(value.hunkReview, DEFAULT_SETTINGS.hunkReview),
   };
 }
 

@@ -1,3 +1,5 @@
+import { diffFilesMarkup, type DiffFileSpec, type DiffsOptions } from "../src/test/diffs-markup";
+
 // GitLab pages for the e2e tests. The markup is trimmed from GitLab's own components
 // (issuable_item.vue, merge_requests_list_app.vue, approvals.vue, merge_widget.vue) and holds no real data.
 
@@ -77,4 +79,15 @@ export function mrPage({ canApprove = true } = {}): string {
           </div>
         </div>
       </div></body></html>`;
+}
+
+// The Changes tab: the diff files of the Vue diffs app or of Rapid Diffs (src/test/diffs-markup.ts).
+// With `lazy`, the files come a moment after the page, as GitLab loads them in batches.
+export function diffsPage(files: DiffFileSpec[], options: DiffsOptions & { lazy?: boolean } = {}): string {
+  const markup = diffFilesMarkup(files, options);
+  const body = options.lazy
+    ? `<div id="diffs"></div><script>setTimeout(() => { document.getElementById("diffs").innerHTML = ${JSON.stringify(markup)}; }, 100);</script>`
+    : markup;
+  return `<!doctype html><html><head><meta name="csrf-token" content="e2e-token"><title>Changes</title></head>
+    <body><svg hidden><use href="${SPRITE}#home"></use></svg>${body}</body></html>`;
 }
