@@ -8,7 +8,7 @@ Built with WXT (Vite) + TypeScript, pnpm. Source in `src/`, output in `.output/`
 - `src/core/router.ts`: `parseRoute` (MR list by scope, MR page and tab, other) and `watchUrl` (SPA navigation).
 - `src/core/lifecycle.ts`: `Feature { name, match(route), mount(ctx) }` and `startFeatures`. Features remount when the route key changes (a list: any filter/sort/page; an MR: not on tab switches).
 - `src/features/`: the registry (`index.ts`); `mr-list/` (Kanban or native list badges and banners), `mr-page/` (seen state, approval guard).
-- `src/core/gitlab/`: `api.ts` (limiter, retries, shared GraphQL requests), `merge-requests.ts` (queries and the three loading stages).
+- `src/core/gitlab/`: `api.ts` (`createGitLabApi`: limiter, retries, shared GraphQL requests; one instance per page), `queries.ts` (GraphQL queries and response types), `merge-requests.ts` (the three loading stages, `computeActivity`, `processMRData`). No DOM access here; tests count the requests per scenario.
 - `src/core/storage/`: `mr-records.ts` (last shown data per MR), `mr-state.ts` (per-MR state); `src/core/settings.ts`.
 - `src/ui/gitlab.ts`: native badges, banners, icons, alert.
 - `src/utils/`: pure helpers with Vitest tests next to them (`*.test.ts`).

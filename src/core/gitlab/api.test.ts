@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, gitlabApi } from "./api";
+import { ApiError, createGitLabApi, type GitLabApi } from "./api";
 
 // fetch that answers only when told to
 function controlledFetch() {
-  const calls: { body: string; resolve: (response: Response) => void }[] = [];
+  const calls: { body: string; headers: Headers; resolve: (response: Response) => void }[] = [];
   const fetchMock = vi.fn(
     (_url: string, init: RequestInit) =>
       new Promise<Response>((resolve, reject) => {
-        calls.push({ body: String(init.body), resolve });
+        calls.push({ body: String(init.body), headers: new Headers(init.headers), resolve });
         init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
       }),
   );
@@ -20,6 +20,11 @@ const json = (data: unknown) => new Response(JSON.stringify({ data }), { status:
 const query = (n: number) => `query Q${n} { x }`;
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+let gitlabApi: GitLabApi;
+beforeEach(() => {
+  gitlabApi = createGitLabApi({ origin: "https://gitlab.com", getCsrfToken: () => "token" });
+});
+
 describe("gitlabApi.graphql", () => {
   beforeEach(() => vi.useRealTimers());
   afterEach(() => vi.unstubAllGlobals());
@@ -30,6 +35,8 @@ describe("gitlabApi.graphql", () => {
     const b = gitlabApi.graphql(query(1), {}, new AbortController().signal);
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://gitlab.com/api/graphql");
+    expect(calls[0]?.headers.get("X-CSRF-Token")).toBe("token");
     calls[0]?.resolve(json({ ok: 1 }));
     await expect(a).resolves.toEqual({ ok: 1 });
     await expect(b).resolves.toEqual({ ok: 1 });
