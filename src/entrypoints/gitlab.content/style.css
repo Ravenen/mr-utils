@@ -7,7 +7,6 @@ ul[data-mrflow-board] {
   --mrflow-gap: 16px;
   --mrflow-column: calc((100% - 2 * var(--mrflow-gap)) / 3);
   --mrflow-column-background: var(--gl-background-color-subtle, var(--gl-color-neutral-10, #fbfafd));
-  --mrflow-column-border: var(--gl-border-color-section, var(--gl-border-color-default, #dcdcde));
 }
 
 .mrflow-board-header {
@@ -17,10 +16,9 @@ ul[data-mrflow-board] {
   margin-top: 16px;
 }
 
+/* No border: the column body below has none either, so both are exactly as wide */
 .mrflow-column-header {
   padding: 10px;
-  border: 1px solid var(--mrflow-column-border);
-  border-bottom: 0;
   border-radius: 0.25rem 0.25rem 0 0;
   background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
   color: var(--gl-text-color-heading, var(--gl-text-color));
@@ -128,14 +126,16 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   display: flex;
 }
 
-/* Thread badges joined into one pill */
-.mrflow-badges > .badge-pill + .badge-pill {
+/* Joined into one pill: the thread badges, and GitLab's own "Approved" badge with our N/M */
+.mrflow-badges > .badge-pill + .badge-pill,
+[data-testid="mr-approvals"] > .badge + .mrflow-approvals-badge {
   border-top-left-radius: 2rem !important;
   border-bottom-left-radius: 2rem !important;
   margin-left: 2px !important;
 }
 
-.mrflow-badges > .badge-pill:has(+ .badge-pill) {
+.mrflow-badges > .badge-pill:has(+ .badge-pill),
+[data-testid="mr-approvals"] > .badge:has(+ .mrflow-approvals-badge) {
   border-top-right-radius: 2rem !important;
   border-bottom-right-radius: 2rem !important;
 }
@@ -143,10 +143,6 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
 [data-testid="mr-approvals"]:has(> .mrflow-approvals-badge) {
   display: flex !important;
   align-items: center;
-}
-
-.mrflow-approvals-badge {
-  margin-left: 2px;
 }
 
 .mrflow-banners {
