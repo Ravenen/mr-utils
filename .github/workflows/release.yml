@@ -1,0 +1,110 @@
+name: Release
+
+# Every push to main updates a release PR (version bump in package.json + CHANGELOG.md) from the
+# Conventional Commits since the last release. Merging that PR tags vX.Y.Z, creates the GitHub
+# release, and the publish job below builds it and submits it to the Chrome Web Store and AMO.
+# The publish job runs in this workflow because a tag pushed with GITHUB_TOKEN starts no workflows.
+# Store credentials: see docs/releasing.md. Without them the stores are skipped with a warning.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and submit again, e.g. v2.0.0
+        required: true
+      dry_run:
+        description: Only check the store credentials, upload nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint && pnpm typecheck && pnpm test
+
+      - name: Build and zip
+        id: package
+        run: |
+          pnpm zip
+          pnpm zip:firefox
+          version=$(node -p "require('./package.json').version")
+          echo "chrome=.output/mrflow-${version}-chrome.zip" >> "$GITHUB_OUTPUT"
+          echo "firefox=.output/mrflow-${version}-firefox.zip" >> "$GITHUB_OUTPUT"
+          echo "sources=.output/mrflow-${version}-sources.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Check that the AMO sources zip rebuilds the Firefox build
+        run: ./scripts/verify-sources.sh
+
+      - name: Attach the zips to the GitHub release
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release upload "$TAG" --clobber
+          ${{ steps.package.outputs.chrome }} ${{ steps.package.outputs.firefox }} ${{ steps.package.outputs.sources }}
+
+      - name: Submit to the Chrome Web Store and AMO
+        env:
+          CHROME_API_VERSION: v2
+          CHROME_EXTENSION_ID: ${{ vars.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          FIREFOX_EXTENSION_ID: "{d16c5235-1761-48f3-9fb3-85e3a592e362}"
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+        run: |
+          args=()
+          if [ -n "$CHROME_EXTENSION_ID" ] && [ -n "$CHROME_PUBLISHER_ID" ] && [ -n "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY" ]; then
+            args+=(--chrome-zip "${{ steps.package.outputs.chrome }}")
+          else
+            echo "::warning::Chrome Web Store credentials are not set (docs/releasing.md): not submitted"
+          fi
+          if [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
+            # The code is bundled, so AMO gets the sources zip its reviewers rebuild from
+            args+=(--firefox-zip "${{ steps.package.outputs.firefox }}" --firefox-sources-zip "${{ steps.package.outputs.sources }}")
+          else
+            echo "::warning::AMO credentials are not set (docs/releasing.md): not submitted"
+          fi
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          if [ ${#args[@]} -gt 0 ] && [ "${args[*]}" != "--dry-run" ]; then
+            pnpm wxt submit "${args[@]}"
+          fi

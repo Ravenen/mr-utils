@@ -47,7 +47,7 @@ Changes apply to open GitLab tabs right away. Settings from MRFlow 1.x are migra
 
 ## Privacy
 
-MRFlow reads data only from the GitLab API of the page you are on, using your existing GitLab session. It sends nothing anywhere else and collects no data.
+See [PRIVACY.md](PRIVACY.md). In short: MRFlow reads data only from the GitLab API of the page you are on, using your existing GitLab session. It sends nothing anywhere else and collects no data.
 
 ## Development
 
@@ -64,7 +64,11 @@ pnpm zip:firefox              # .output/mrflow-<version>-firefox.zip + .output/m
 ./scripts/verify-sources.sh   # rebuilds the Firefox build from the sources zip and compares
 ```
 
-### Publishing to addons.mozilla.org
+### Releasing
+
+Automated with release-please: merging the release PR publishes to the Chrome Web Store and AMO. See [docs/releasing.md](docs/releasing.md).
+
+### Publishing to addons.mozilla.org by hand
 
 The code is bundled, so AMO asks for the source code. On *Submit a New Version* answer **Yes** to "Do You Need to Submit Source Code?", upload `mrflow-<version>-firefox.zip` as the add-on and `mrflow-<version>-sources.zip` as the source code. Both must come from the same `pnpm zip:firefox` run (CI uploads both as artifacts). The reviewer builds it with the steps below.
 
