@@ -21,7 +21,8 @@ ul[data-mrflow-board] {
   position: relative;
   padding: 10px;
   border-radius: 0.25rem 0.25rem 0 0;
-  background-color: var(--gl-background-color-section, var(--gl-color-neutral-0, #fff));
+  /* "strong": neutral-50 on the light theme (section would be white like the page), neutral-800 on the dark one */
+  background-color: var(--gl-background-color-strong, var(--gl-color-neutral-50, #ecebea));
   color: var(--gl-text-color-heading, var(--gl-text-color));
   font-weight: bold;
   text-align: center;
