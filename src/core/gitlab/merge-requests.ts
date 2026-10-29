@@ -2,6 +2,17 @@ import type { GitLabApi } from "@/core/gitlab/api";
 import type { Settings } from "@/core/settings";
 import { pruneMrRecords, readMrRecord, writeMrRecord, type MrRecord, type MrRef } from "@/core/storage/mr-records";
 import { getActivityKey, makeBatches, parseUserId } from "@/utils/mr";
+import {
+  MERGE_REQUEST_NOTES_PAGE_QUERY,
+  MERGE_REQUESTS_NOTES_QUERY,
+  MERGE_REQUESTS_QUERY,
+  type MergeRequestsResponse,
+  type MrNode,
+  type MrNotesNode,
+  type Note,
+  type NotesPage,
+  type NotesPageResponse,
+} from "./queries";
 
 const MERGE_REQUESTS_BATCH_SIZE = 50;
 const COLD_NOTES_BATCH_SIZE = 5;
@@ -15,81 +26,6 @@ export interface LoadContext {
   signal: AbortSignal;
   userId: number | null;
   settings: Pick<Settings, "approvalsNeeded">;
-}
-
-// Stage 2: everything except comments. Cheap, so batches are large.
-const MERGE_REQUESTS_QUERY = `
-  query MRFlowMergeRequests($projectPath: ID!, $iids: [String!]) {
-    project(fullPath: $projectPath) {
-      mergeRequests(iids: $iids, first: 100) {
-        nodes {
-          iid
-          webUrl
-          draft
-          updatedAt
-          detailedMergeStatus
-          shouldBeRebased
-          conflicts
-          diffHeadSha
-          userNotesCount
-          resolvableDiscussionsCount
-          resolvedDiscussionsCount
-          approvedBy { nodes { id } }
-        }
-      }
-    }
-  }`;
-
-// Stage 3: comments only (no system notes, which can be most of an MR's discussions), oldest first,
-// each with its discussion. GitLab batch-loads the discussions per MR.
-const NOTES_FIELDS = `
-  pageInfo { hasNextPage endCursor }
-  nodes { author { id } discussion { id resolvable resolved } }`;
-
-const MERGE_REQUESTS_NOTES_QUERY = `
-  query MRFlowMergeRequestsNotes($projectPath: ID!, $iids: [String!]) {
-    project(fullPath: $projectPath) {
-      mergeRequests(iids: $iids, first: 100) {
-        nodes {
-          iid
-          notes(filter: ONLY_COMMENTS, first: 100) { ${NOTES_FIELDS} }
-        }
-      }
-    }
-  }`;
-
-const MERGE_REQUEST_NOTES_PAGE_QUERY = `
-  query MRFlowMergeRequestNotesPage($projectPath: ID!, $iid: String!, $after: String) {
-    project(fullPath: $projectPath) {
-      mergeRequest(iid: $iid) {
-        notes(filter: ONLY_COMMENTS, first: 100, after: $after) { ${NOTES_FIELDS} }
-      }
-    }
-  }`;
-
-export interface MrNode {
-  iid: string;
-  webUrl?: string;
-  draft?: boolean;
-  updatedAt?: string;
-  detailedMergeStatus?: string;
-  shouldBeRebased?: boolean;
-  conflicts?: boolean;
-  diffHeadSha?: string;
-  userNotesCount?: number;
-  resolvableDiscussionsCount?: number;
-  resolvedDiscussionsCount?: number;
-  approvedBy?: { nodes: { id: string }[] };
-}
-
-interface Note {
-  author?: { id: string };
-  discussion?: { id: string; resolvable: boolean; resolved: boolean };
-}
-
-interface NotesPage {
-  pageInfo: { hasNextPage: boolean; endCursor: string | null };
-  nodes: Note[];
 }
 
 export interface Activity {
@@ -125,7 +61,7 @@ async function fetchAllNotes(ctx: LoadContext, projectPath: string, mrIid: strin
   const notes = [...firstPage.nodes];
   let pageInfo = firstPage.pageInfo;
   while (pageInfo.hasNextPage) {
-    const data = await ctx.api.graphql<{ project?: { mergeRequest?: { notes?: NotesPage } } }>(
+    const data = await ctx.api.graphql<NotesPageResponse>(
       MERGE_REQUEST_NOTES_PAGE_QUERY,
       { projectPath, iid: String(mrIid), after: pageInfo.endCursor },
       ctx.signal,
@@ -174,7 +110,7 @@ export function computeActivity(notes: Note[], userId: number | null): Activity 
 }
 
 // Combine a stage 2 node with (possibly not yet refreshed) per-user activity for UI
-function processMRData(ctx: LoadContext, mr: MrNode, activity: Activity | null | undefined): MrData {
+export function processMRData(ctx: LoadContext, mr: MrNode, activity: Activity | null | undefined): MrData {
   const approvalsRequired = ctx.settings.approvalsNeeded;
   const approvedByIds = (mr.approvedBy?.nodes || []).map((user) => parseUserId(user.id));
   const approvalsGiven = approvedByIds.length;
@@ -203,7 +139,7 @@ async function fetchNodes<N extends { iid: string }>(
   projectPath: string,
   batch: MrRef[],
 ): Promise<Map<string, N>> {
-  const data = await ctx.api.graphql<{ project?: { mergeRequests?: { nodes?: N[] } } }>(
+  const data = await ctx.api.graphql<MergeRequestsResponse<N>>(
     query,
     { projectPath, iids: batch.map((item) => String(item.mrIid)) },
     ctx.signal,
@@ -217,12 +153,7 @@ async function fetchActivities<T extends MrRef>(
   projectPath: string,
   batch: T[],
 ): Promise<[T, Activity][]> {
-  const nodesByIid = await fetchNodes<{ iid: string; notes: NotesPage }>(
-    ctx,
-    MERGE_REQUESTS_NOTES_QUERY,
-    projectPath,
-    batch,
-  );
+  const nodesByIid = await fetchNodes<MrNotesNode>(ctx, MERGE_REQUESTS_NOTES_QUERY, projectPath, batch);
   return Promise.all(
     batch.flatMap((item) => {
       const node = nodesByIid.get(String(item.mrIid));
