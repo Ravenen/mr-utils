@@ -50,7 +50,7 @@ export const approvalGuardFeature: Feature<MrPageRoute> = {
     const checks = document.createElement("div");
     checks.className = "mrflow-checks gl-z-1 gl-mb-4 gl-flex gl-flex-col gl-gap-3";
     const heading = document.createElement("p");
-    heading.className = "gl-font-bold gl-m-0";
+    heading.className = "gl-font-bold gl-m-0 gl-mb-2";
     heading.textContent = "Check following conditions to approve:";
     checks.appendChild(heading);
     CHECKS.forEach(({ id, text }) => checks.appendChild(createCheck(mrPath, id, text, updateVisibility)));
