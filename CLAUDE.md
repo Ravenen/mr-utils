@@ -14,18 +14,20 @@ Built with WXT (Vite) + TypeScript, pnpm. Source in `src/`, output in `.output/`
 - `src/core/gitlab/dom.ts`: every GitLab selector, stable hooks (`data-testid`, `js-` classes) first with fallbacks to older markup.
 - `src/ui/`: native components (`badge.ts`, `alert.ts`, `checkbox.ts`, `spinner.ts`, `icons.ts`).
 - `src/test/fixtures.ts`: GitLab markup trimmed from GitLab's own components, a fake API and a feature context for tests.
+- `e2e/`: Playwright tests of the built Chrome extension (`pnpm build && pnpm e2e`) on mock GitLab pages (`pages.ts`) and a mock GitLab API that records every GraphQL operation (`gitlab.ts`). Use them for anything that needs real layout, several pages or the popup/options pages.
 - `src/utils/`: pure helpers with Vitest tests next to them (`*.test.ts`).
 - `src/entrypoints/popup/`, `src/entrypoints/options/`: Vue 3 pages (feature toggles; all settings). `src/components/`: shared Vue components, `useSettings`, and `pajamas.css` (GitLab's design tokens from `@gitlab/ui` and Pajamas-like controls; dark mode via `html.gl-dark`).
 - `public/`: icons, copied as is. The manifest is generated from `wxt.config.ts` and `package.json` (version).
 - `scripts/verify-sources.sh`: rebuilds the Firefox build from the AMO sources zip and diffs it.
-- `.github/workflows/build.yml`: CI; lint, typecheck, tests, both builds, sources check; uploads the builds and the AMO sources zip on every PR.
+- `.github/workflows/build.yml`: CI; lint, typecheck, unit and e2e tests, both builds, sources check; uploads the builds and the AMO sources zip on every PR.
 - `docs/ROADMAP.md`: audit and plan (2.0 = rewrite to WXT + TypeScript, in progress).
 
 ## Commands
 ```bash
 pnpm install
 pnpm lint && pnpm typecheck && pnpm test
-pnpm build && pnpm build:firefox
+pnpm build && pnpm e2e
+pnpm build:firefox
 pnpm zip:firefox && ./scripts/verify-sources.sh
 pnpm exec web-ext lint --source-dir .output/firefox-mv3
 ```

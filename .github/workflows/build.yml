@@ -33,6 +33,21 @@ jobs:
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Install Chromium for the e2e tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E tests (Playwright, built Chrome extension on mock GitLab pages)
+        run: pnpm e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
       - name: Lint for Firefox (web-ext)
         run: pnpm exec web-ext lint --source-dir .output/firefox-mv3
 

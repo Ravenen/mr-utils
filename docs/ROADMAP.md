@@ -302,7 +302,7 @@ interface ChecklistItem {
 - [x] Kanban через CSS Grid над нативним списком — #6
 - [x] Схема налаштувань + міграція, options page — #8
 - [ ] Release workflow + публікація в CWS і AMO — #9
-- [ ] E2E-тести на фікстурах — #10
+- [x] E2E-тести на фікстурах — #10
 
 ### Milestone 2.1: hunk review — епік #12
 - [ ] Прототип на поточному diffs DOM і на Rapid Diffs — #16
