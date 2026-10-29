@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fakeApi, featureContext, mrPage, node, styledElements } from "@/test/fixtures";
 import { approvalGuardFeature } from "./approval-guard";
+import { seenStateFeature } from "./seen-state";
 import type { MrPageRoute } from "./seen-state";
 
 const MR = "/g/p/-/merge_requests/1";
@@ -53,6 +54,35 @@ describe("approval guard", () => {
     tick("docs_check");
     tick("branch_check");
     expect(hidden(merge())).toBe(false);
+  });
+
+  it("stays out when turned off in the settings", async () => {
+    document.body.innerHTML = mrPage();
+    const { ctx } = featureContext<MrPageRoute>(MR, fakeApi({ 1: node(1) }), { approvalGuard: false });
+    await approvalGuardFeature.mount(ctx);
+    expect(document.querySelector(".mrflow-checks")).toBeNull();
+    expect(hidden(approve())).toBe(false);
+  });
+
+  it("remounts after a settings change with the page's data, without loading it again", async () => {
+    document.body.innerHTML = mrPage();
+    let requests = 0;
+    const api = fakeApi({ 1: node(1) });
+    const counting = {
+      ...api,
+      graphql: (...args: Parameters<typeof api.graphql>) => (requests++, api.graphql(...args)),
+    };
+    const first = featureContext<MrPageRoute>(MR, counting as typeof api, { approvalGuard: false });
+    await approvalGuardFeature.mount(first.ctx);
+    await seenStateFeature.mount(first.ctx);
+    expect(requests).toBeGreaterThan(0);
+
+    requests = 0;
+    first.unmount();
+    const next = featureContext<MrPageRoute>(MR, counting as typeof api, {}, first.ctx.cache);
+    await approvalGuardFeature.mount(next.ctx);
+    expect(document.querySelector(".mrflow-checks")).not.toBeNull();
+    expect(requests).toBe(0);
   });
 
   it("keeps Revoke approval reachable", async () => {

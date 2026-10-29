@@ -2,7 +2,7 @@ import "./style.css";
 import { createGitLabApi, getCurrentUserId } from "@/core/gitlab/api";
 import { csrfToken } from "@/core/gitlab/dom";
 import { startFeatures } from "@/core/lifecycle";
-import { loadSettings } from "@/core/settings";
+import { loadSettings, watchSettings } from "@/core/settings";
 import { features } from "@/features";
 
 export default defineContentScript({
@@ -20,7 +20,12 @@ export default defineContentScript({
     });
     startFeatures(
       features,
-      { api, loadSettings, getCurrentUserId: (signal) => getCurrentUserId(api, signal) },
+      {
+        api,
+        loadSettings,
+        watchSettings: (onChange, signal) => watchSettings(onChange, signal),
+        getCurrentUserId: (signal) => getCurrentUserId(api, signal),
+      },
       ctx.signal,
     );
   },

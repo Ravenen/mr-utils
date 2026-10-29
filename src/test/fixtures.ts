@@ -110,18 +110,23 @@ export function fakeApi(nodes: Record<string, MrNode>): GitLabApi {
 }
 
 export const SETTINGS: Settings = {
+  version: 2,
+  approvalsSource: "setting",
   approvalsNeeded: 2,
   kanbanView: true,
   boardLoading: "all",
   animateCards: false,
+  approvalGuard: true,
   resetChecksOnNewCommits: true,
 };
 
-// A mount context for one feature, as startFeatures builds it
+// A mount context for one feature, as startFeatures builds it. Pass the cache of an earlier context to
+// mount again on the same page (as after a settings change).
 export function featureContext<R extends Route>(
   path: string,
   api: GitLabApi,
   settings: Partial<Settings> = {},
+  cache = new Map<string, unknown>(),
 ): { ctx: FeatureContext<R>; unmount: () => void } {
   const controller = new AbortController();
   const ctx = {
@@ -130,6 +135,7 @@ export function featureContext<R extends Route>(
     settings: { ...SETTINGS, ...settings },
     userId: 7,
     api,
+    cache,
     onCleanup(fn: () => void) {
       controller.signal.addEventListener("abort", fn, { once: true });
     },

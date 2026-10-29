@@ -1,0 +1,272 @@
+/* GitLab look for MRFlow's own pages (popup, options): GitLab's design tokens and Pajamas-like controls */
+@import "@gitlab/ui/src/tokens/build/css/tokens.css";
+@import "@gitlab/ui/src/tokens/build/css/tokens.dark.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.gl-dark {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--gl-font-family-regular);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--gl-text-color-default);
+  background-color: var(--gl-background-color-default);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.5rem;
+  color: var(--gl-text-color-heading);
+  font-weight: var(--gl-font-weight-heading, 600);
+}
+
+h1 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+h2 {
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+}
+
+p {
+  margin: 0 0 0.5rem;
+}
+
+a {
+  color: var(--gl-text-color-link);
+}
+
+.gl-text-subtle {
+  color: var(--gl-text-color-subtle);
+}
+
+/* Section card, like GitLab's settings sections */
+.gl-card {
+  border: 1px solid var(--gl-border-color-default);
+  border-radius: var(--gl-border-radius-lg, 0.5rem);
+  background-color: var(--gl-background-color-default);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.gl-form-group {
+  margin-bottom: 1rem;
+}
+
+.gl-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.gl-form-group > label,
+.gl-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: var(--gl-font-weight-bold, 600);
+  color: var(--gl-text-color-heading);
+}
+
+.gl-form-text {
+  margin-top: 0.25rem;
+  color: var(--gl-text-color-subtle);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.gl-form-input,
+.gl-form-select {
+  display: block;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  font: inherit;
+  color: var(--gl-text-color-default);
+  background-color: var(--gl-control-background-color-default);
+  border: 1px solid var(--gl-control-border-color-default);
+  border-radius: var(--gl-control-border-radius);
+}
+
+.gl-form-input:hover,
+.gl-form-select:hover {
+  border-color: var(--gl-control-border-color-hover);
+}
+
+.gl-form-input:focus,
+.gl-form-select:focus,
+.gl-button:focus-visible,
+.gl-toggle:focus-visible,
+.gl-radio:focus-visible {
+  outline: 2px solid var(--gl-focus-ring-outer-color);
+  outline-offset: 1px;
+}
+
+.gl-form-input[aria-invalid="true"] {
+  border-color: var(--gl-control-border-color-error);
+}
+
+.gl-form-input-sm {
+  max-width: 6rem;
+}
+
+/* Radio group */
+.gl-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gl-radio-label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.gl-radio {
+  margin: 0.125rem 0 0;
+  accent-color: var(--gl-control-background-color-selected-default);
+}
+
+/* Toggle (GlToggle): the button is the track, ::after the thumb */
+.gl-toggle-wrapper {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.gl-toggle {
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--gl-toggle-switch-track-border-color-unchecked-default);
+  border-radius: var(--gl-border-radius-full);
+  background-color: var(--gl-toggle-switch-track-color-unchecked-default);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.gl-toggle:hover {
+  border-color: var(--gl-toggle-switch-track-border-color-unchecked-hover);
+  background-color: var(--gl-toggle-switch-track-color-unchecked-hover);
+}
+
+.gl-toggle[aria-checked="true"] {
+  border-color: var(--gl-toggle-switch-track-border-color-checked-default);
+  background-color: var(--gl-toggle-switch-track-color-checked-default);
+}
+
+.gl-toggle[aria-checked="true"]:hover {
+  border-color: var(--gl-toggle-switch-track-border-color-checked-hover);
+  background-color: var(--gl-toggle-switch-track-color-checked-hover);
+}
+
+.gl-toggle::after {
+  content: "";
+  position: absolute;
+  top: calc(0.25rem - 1px);
+  left: calc(0.25rem - 1px);
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background-color: var(--gl-toggle-switch-background-color-unchecked-default);
+  transition: transform 0.1s ease;
+}
+
+.gl-toggle[aria-checked="true"]::after {
+  background-color: var(--gl-toggle-switch-background-color-checked-default);
+  transform: translateX(1rem);
+}
+
+/* Buttons (GlButton) */
+.gl-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  font: inherit;
+  border: 1px solid var(--gl-button-default-primary-border-color-default);
+  border-radius: var(--gl-border-radius-lg, 0.5rem);
+  color: var(--gl-button-default-primary-foreground-color-default);
+  background-color: var(--gl-button-default-primary-background-color-default);
+  cursor: pointer;
+}
+
+.gl-button:hover {
+  border-color: var(--gl-button-default-primary-border-color-hover);
+  background-color: var(--gl-button-default-primary-background-color-hover);
+}
+
+.gl-button-confirm {
+  border-color: var(--gl-button-confirm-primary-border-color-default);
+  color: var(--gl-button-confirm-primary-foreground-color-default);
+  background-color: var(--gl-button-confirm-primary-background-color-default);
+}
+
+.gl-button-confirm:hover {
+  border-color: var(--gl-button-confirm-primary-border-color-hover);
+  color: var(--gl-button-confirm-primary-foreground-color-hover);
+  background-color: var(--gl-button-confirm-primary-background-color-hover);
+}
+
+.gl-button-link {
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  background: none;
+  color: var(--gl-text-color-link);
+}
+
+.gl-button-link:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+/* Alert (GlAlert) */
+.gl-alert {
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--gl-alert-info-border-color, var(--gl-border-color-default));
+  border-radius: var(--gl-border-radius-default, 0.25rem);
+  background-color: var(--gl-alert-info-background-color, var(--gl-background-color-subtle));
+}
+
+.gl-alert-success {
+  border-left-color: var(--gl-alert-success-border-color);
+  background-color: var(--gl-alert-success-background-color);
+}
+
+.gl-alert-danger {
+  border-left-color: var(--gl-alert-danger-border-color);
+  background-color: var(--gl-alert-danger-background-color);
+}
+
+.gl-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.gl-radio-label .gl-form-text {
+  display: block;
+}

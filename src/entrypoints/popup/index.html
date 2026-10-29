@@ -2,41 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>MRFlow Settings</title>
-    <link rel="stylesheet" href="./style.css" />
+    <title>MRFlow</title>
   </head>
   <body>
-    <div class="container">
-      <h3 class="title">MRFlow Settings</h3>
-      <div class="setting">
-        <label for="approvalsNeeded">Approvals Needed</label>
-        <input type="number" id="approvalsNeeded" min="1" class="input-field" />
-      </div>
-      <div class="setting">
-        <label for="kanbanView">Enable Kanban Board</label>
-        <input type="checkbox" id="kanbanView" />
-      </div>
-      <div class="setting">
-        <label for="boardLoading">Kanban loading</label>
-        <select id="boardLoading" class="input-field">
-          <option value="all">All cards at once</option>
-          <option value="progressive">Each card as soon as it loads</option>
-        </select>
-      </div>
-      <div class="setting">
-        <label for="animateCards">Animate cards moving between columns</label>
-        <input type="checkbox" id="animateCards" />
-      </div>
-      <div class="setting">
-        <label for="resetChecksOnNewCommits">Reset approval checks on new commits</label>
-        <input type="checkbox" id="resetChecksOnNewCommits" />
-      </div>
-      <button id="saveSettings" class="save-button">Save</button>
-      <div id="alertMessage" class="alert-message success">Settings saved successfully!</div>
-      <div id="errorMessage" class="alert-message error">
-        Error: settings could not be saved. Approvals needed must be 1 or more.
-      </div>
-    </div>
-    <script type="module" src="./main.js"></script>
+    <div id="app"></div>
+    <script type="module" src="./main.ts"></script>
   </body>
 </html>

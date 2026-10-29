@@ -54,7 +54,7 @@ const node = (iid: number, extra: Partial<MrNode> = {}): MrNode => ({
 });
 
 describe("processMRData", () => {
-  const ctx = { userId: ME, settings: { approvalsNeeded: 2 } } as LoadContext;
+  const ctx = { userId: ME, settings: { approvalsSource: "setting", approvalsNeeded: 2 } } as LoadContext;
 
   it("is ready when mergeable with enough approvals", () => {
     const data = processMRData(ctx, node(1, { approvedBy: { nodes: [user(ME), user(8)] } }), null);
@@ -69,6 +69,15 @@ describe("processMRData", () => {
       headSha: "sha1",
       ...EMPTY_ACTIVITY,
     });
+  });
+
+  it("takes the required approvals from GitLab's rules when asked to, the setting otherwise", () => {
+    const fromGitLab = { ...ctx, settings: { approvalsSource: "gitlab", approvalsNeeded: 2 } } as LoadContext;
+    const mr = node(1, { approvalsRequired: 1, approvedBy: { nodes: [user(8)] } });
+    expect(processMRData(fromGitLab, mr, null)).toMatchObject({ approvalsRequired: 1, isReady: true });
+    expect(processMRData(ctx, mr, null)).toMatchObject({ approvalsRequired: 2, isReady: false });
+    // No approval rules (Free tier): the setting
+    expect(processMRData(fromGitLab, node(1, { approvalsRequired: 0 }), null).approvalsRequired).toBe(2);
   });
 
   it("flags conflicts and rebase from either field", () => {
@@ -135,11 +144,15 @@ async function load(api: GitLabApi, items: { projectPath: string; mrIid: string 
   const updates: [string, MrData][][] = [];
   const errors: unknown[] = [];
   const signal = new AbortController().signal;
-  await loadMergeRequestsData({ api, signal, userId: ME, settings: { approvalsNeeded: 2 } }, items, {
-    onUpdate: (batch) => updates.push(batch.map(([item, data]) => [`${item.projectPath}#${item.mrIid}`, data])),
-    onError: (error) => errors.push(error),
-    ...options,
-  });
+  await loadMergeRequestsData(
+    { api, signal, userId: ME, settings: { approvalsSource: "setting", approvalsNeeded: 2 } },
+    items,
+    {
+      onUpdate: (batch) => updates.push(batch.map(([item, data]) => [`${item.projectPath}#${item.mrIid}`, data])),
+      onError: (error) => errors.push(error),
+      ...options,
+    },
+  );
   return { updates, errors, last: new Map(updates.flat()) };
 }
 
@@ -234,7 +247,12 @@ describe("loadMergeRequestsData", () => {
     const updates: unknown[] = [];
     const errors: unknown[] = [];
     const loading = loadMergeRequestsData(
-      { api: gitlab.api, signal: controller.signal, userId: ME, settings: { approvalsNeeded: 2 } },
+      {
+        api: gitlab.api,
+        signal: controller.signal,
+        userId: ME,
+        settings: { approvalsSource: "setting", approvalsNeeded: 2 },
+      },
       items,
       { onUpdate: (batch) => updates.push(batch), onError: (error) => errors.push(error) },
     );
@@ -251,7 +269,12 @@ describe("getMergeRequestData", () => {
   it("loads one MR with two requests and remembers it for the list", async () => {
     const { nodes, notes, items } = project("g/p", 1);
     const gitlab = fakeGitLab(nodes, notes);
-    const ctx = { api: gitlab.api, signal: new AbortController().signal, userId: ME, settings: { approvalsNeeded: 2 } };
+    const ctx: LoadContext = {
+      api: gitlab.api,
+      signal: new AbortController().signal,
+      userId: ME,
+      settings: { approvalsSource: "setting", approvalsNeeded: 2 },
+    };
     const data = await getMergeRequestData(ctx, "g/p", "1");
     expect(data).toMatchObject({ totalUserThreads: 1, headSha: "sha1" });
     expect(gitlab.requests.map((r) => r.name).sort()).toEqual([STAGE2, NOTES].sort());

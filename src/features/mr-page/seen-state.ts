@@ -25,14 +25,19 @@ async function saveSeenState(ctx: FeatureContext<MrPageRoute>): Promise<MrData |
   return mrData;
 }
 
-// Fresh MR data, loaded once per mount and shared by the MR page features (approval guard needs it too)
-const firstLoad = new WeakMap<AbortSignal, Promise<MrData | null>>();
+// Fresh MR data, loaded once per page and shared by the MR page features (approval guard needs it too),
+// also when one of them remounts after a settings change
+const PAGE_DATA = "mr-page/data";
 export function loadMrPageData(ctx: FeatureContext<MrPageRoute>): Promise<MrData | null> {
-  let load = firstLoad.get(ctx.signal);
+  let load = ctx.cache.get(PAGE_DATA) as Promise<MrData | null> | undefined;
   if (!load) {
     migrateMrState(ctx.route.url.pathname, ctx.route.mrPath);
     load = saveSeenState(ctx);
-    firstLoad.set(ctx.signal, load);
+    ctx.cache.set(PAGE_DATA, load);
+    // Loaded for a feature that went away: the next one loads again
+    void load.then(() => {
+      if (ctx.signal.aborted) ctx.cache.delete(PAGE_DATA);
+    });
   }
   return load;
 }
@@ -40,6 +45,8 @@ export function loadMrPageData(ctx: FeatureContext<MrPageRoute>): Promise<MrData
 export const seenStateFeature: Feature<MrPageRoute> = {
   name: "mr-seen-state",
   match: (route): route is MrPageRoute => route.kind === "mr-page",
+  // Reads no setting that changes what it does
+  settings: [],
   async mount(ctx) {
     await loadMrPageData(ctx);
 

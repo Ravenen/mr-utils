@@ -19,6 +19,7 @@ function stripProjectRoot(): Plugin {
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   srcDir: "src",
+  modules: ["@wxt-dev/module-vue"],
   manifestVersion: 3,
   // Readable output: AMO reviewers compare it with the sources zip, and bug reports get real stack traces
   vite: () => ({ build: { minify: false }, plugins: [stripProjectRoot()] }),

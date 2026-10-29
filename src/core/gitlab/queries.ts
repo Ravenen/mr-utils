@@ -17,6 +17,7 @@ export const MERGE_REQUESTS_QUERY = `
           userNotesCount
           resolvableDiscussionsCount
           resolvedDiscussionsCount
+          approvalsRequired
           approvedBy { nodes { id } }
         }
       }
@@ -62,6 +63,8 @@ export interface MrNode {
   userNotesCount?: number;
   resolvableDiscussionsCount?: number;
   resolvedDiscussionsCount?: number;
+  // Required by the project's approval rules (Premium); 0 or null without rules
+  approvalsRequired?: number | null;
   approvedBy?: { nodes: { id: string }[] };
 }
 
