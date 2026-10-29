@@ -27,17 +27,19 @@ export interface Dependencies {
   api: GitLabApi;
   loadSettings(): Promise<Settings>;
   getCurrentUserId(signal: AbortSignal): Promise<number | null>;
+  // Calls onChange when the settings change, e.g. in the popup
+  watchSettings?(onChange: () => void, signal: AbortSignal): void;
   watchUrl?: typeof watchUrl;
 }
 
 // Mounts the features matching the current route and remounts them on every navigation that changes
-// the route key. The previous mount is aborted and cleaned up first.
+// the route key, and when the settings change. The previous mount is aborted and cleaned up first.
 export function startFeatures(features: Feature[], deps: Dependencies, signal: AbortSignal): void {
   let current: { key: string; controller: AbortController } | null = null;
 
-  const navigate = (href: string) => {
+  const navigate = (href: string, { remount = false } = {}) => {
     const route = parseRoute(href);
-    if (current?.key === route.key) return;
+    if (current?.key === route.key && !remount) return;
     current?.controller.abort();
     if (signal.aborted) return;
 
@@ -79,6 +81,7 @@ export function startFeatures(features: Feature[], deps: Dependencies, signal: A
   };
 
   (deps.watchUrl ?? watchUrl)(navigate, signal);
+  deps.watchSettings?.(() => navigate(location.href, { remount: true }), signal);
   signal.addEventListener("abort", () => current?.controller.abort(), { once: true });
   navigate(location.href);
 }

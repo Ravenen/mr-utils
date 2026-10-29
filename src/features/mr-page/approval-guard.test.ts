@@ -55,6 +55,14 @@ describe("approval guard", () => {
     expect(hidden(merge())).toBe(false);
   });
 
+  it("stays out when turned off in the settings", async () => {
+    document.body.innerHTML = mrPage();
+    const { ctx } = featureContext<MrPageRoute>(MR, fakeApi({ 1: node(1) }), { approvalGuard: false });
+    await approvalGuardFeature.mount(ctx);
+    expect(document.querySelector(".mrflow-checks")).toBeNull();
+    expect(hidden(approve())).toBe(false);
+  });
+
   it("keeps Revoke approval reachable", async () => {
     await mount({ revoke: true });
     expect(hidden(approve())).toBe(false);

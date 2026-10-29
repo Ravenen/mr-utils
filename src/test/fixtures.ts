@@ -110,10 +110,13 @@ export function fakeApi(nodes: Record<string, MrNode>): GitLabApi {
 }
 
 export const SETTINGS: Settings = {
+  version: 2,
+  approvalsSource: "setting",
   approvalsNeeded: 2,
   kanbanView: true,
   boardLoading: "all",
   animateCards: false,
+  approvalGuard: true,
   resetChecksOnNewCommits: true,
 };
 

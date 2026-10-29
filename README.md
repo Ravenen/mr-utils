@@ -37,12 +37,13 @@ Disable the store version while testing, otherwise both run on the page.
 
 ## Settings
 
-Click the extension icon:
-- **Approvals Needed**: how many approvals an MR needs (used by the approvals badge and the "ready" highlight).
-- **Enable Kanban Board**: Kanban on the list or the native list.
-- **Kanban loading**: apply API updates in waves (default) or as soon as each batch arrives.
-- **Animate cards moving between columns** (on by default; also off when the system asks for reduced motion).
-- **Reset approval checks on new commits**.
+The extension icon opens a short panel to turn the Kanban board and the approval checklist on or off. **All settings** opens the options page:
+- **Required approvals**: from the project's approval rules (Premium), or always a fixed number; the number is also used for projects without rules.
+- **Kanban board**, **Board updates** (in waves, the default, or each card as soon as it loads) and **Animate cards moving between columns** (also off when the system asks for reduced motion).
+- **Approval checklist** and **Reset checks on new commits**.
+- **Export / Import** settings as JSON.
+
+Changes apply to open GitLab tabs right away. Settings from MRFlow 1.x are migrated on the first start.
 
 ## Privacy
 
@@ -77,6 +78,6 @@ pnpm install --frozen-lockfile
 pnpm build:firefox
 ```
 
-The add-on is in `.output/firefox-mv3`. The output is not minified. Third-party code in it comes only from [WXT](https://wxt.dev) (the `browser` API shim and `defineContentScript`); everything else is in `src/`.
+The add-on is in `.output/firefox-mv3`. The output is not minified. Third-party code in it: [WXT](https://wxt.dev) (the `browser` API shim and `defineContentScript`), [Vue](https://vuejs.org) (popup and options page), GitLab's design tokens from [`@gitlab/ui`](https://www.npmjs.com/package/@gitlab/ui) (CSS only) and the GitLab Sans font from [`@gitlab/fonts`](https://www.npmjs.com/package/@gitlab/fonts). Everything else is in `src/`.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the plan.

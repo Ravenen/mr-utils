@@ -6,22 +6,30 @@ import type { Route } from "./router";
 import type { Settings } from "./settings";
 
 const SETTINGS: Settings = {
+  version: 2,
+  approvalsSource: "setting",
   approvalsNeeded: 2,
   kanbanView: true,
   boardLoading: "all",
   animateCards: true,
+  approvalGuard: true,
   resetChecksOnNewCommits: true,
 };
 
 // Navigation is driven by hand instead of by DOM mutations
 function setup(features: Feature[]) {
   let onUrlChange: (href: string) => void = () => {};
+  let onSettingsChange: () => void = () => {};
+  let settings = SETTINGS;
   const deps: Dependencies = {
     api: {} as GitLabApi,
-    loadSettings: async () => SETTINGS,
+    loadSettings: async () => settings,
     getCurrentUserId: async () => 7,
     watchUrl: (onChange) => {
       onUrlChange = onChange;
+    },
+    watchSettings: (onChange) => {
+      onSettingsChange = onChange;
     },
   };
   const root = new AbortController();
@@ -30,7 +38,11 @@ function setup(features: Feature[]) {
     history.replaceState(null, "", path);
     onUrlChange(location.href);
   };
-  return { navigate, root };
+  const changeSettings = (changes: Partial<Settings>) => {
+    settings = { ...settings, ...changes };
+    onSettingsChange();
+  };
+  return { navigate, root, changeSettings };
 }
 
 // A feature that mounts a board after an async step, like the Kanban does
@@ -125,6 +137,25 @@ describe("startFeatures", () => {
     navigate("/g/p/-/merge_requests");
     await flush();
     expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it("remounts with the new settings when they change", async () => {
+    vi.useFakeTimers();
+    history.replaceState(null, "", "/g/p/-/merge_requests");
+    const seen: boolean[] = [];
+    const { changeSettings } = setup([
+      {
+        name: "list",
+        match: (route): route is Route => route.kind === "mr-list",
+        mount(ctx) {
+          seen.push(ctx.settings.kanbanView);
+        },
+      },
+    ]);
+    await flush();
+    changeSettings({ kanbanView: false });
+    await flush();
+    expect(seen).toEqual([true, false]);
   });
 
   it("unmounts everything when the extension is unloaded", async () => {

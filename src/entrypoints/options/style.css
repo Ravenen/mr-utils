@@ -1,0 +1,20 @@
+.mrflow-options {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.mrflow-options-header {
+  margin-bottom: 1.5rem;
+}
+
+.mrflow-options-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mrflow-options-status {
+  margin-top: 0.75rem;
+}

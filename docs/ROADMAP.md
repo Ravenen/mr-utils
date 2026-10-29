@@ -300,7 +300,7 @@ interface ChecklistItem {
 - [x] GraphQL-клієнт, кеш, обмежувач — #4
 - [x] `dom.ts`, нативні UI-компоненти — #5
 - [x] Kanban через CSS Grid над нативним списком — #6
-- [ ] Схема налаштувань + міграція, options page — #8
+- [x] Схема налаштувань + міграція, options page — #8
 - [ ] Release workflow + публікація в CWS і AMO — #9
 - [ ] E2E-тести на фікстурах — #10
 

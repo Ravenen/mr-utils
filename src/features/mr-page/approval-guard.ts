@@ -20,6 +20,7 @@ export const approvalGuardFeature: Feature<MrPageRoute> = {
   name: "approval-guard",
   match: (route): route is MrPageRoute => route.kind === "mr-page",
   async mount(ctx) {
+    if (!ctx.settings.approvalGuard) return;
     const { mrPath } = ctx.route;
     const mrData = await loadMrPageData(ctx);
     if (ctx.signal.aborted) return;

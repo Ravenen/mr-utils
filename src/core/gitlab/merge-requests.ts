@@ -1,5 +1,5 @@
 import type { GitLabApi } from "@/core/gitlab/api";
-import type { Settings } from "@/core/settings";
+import { requiredApprovals, type Settings } from "@/core/settings";
 import { pruneMrRecords, readMrRecord, writeMrRecord, type MrRecord, type MrRef } from "@/core/storage/mr-records";
 import { getActivityKey, makeBatches, parseUserId } from "@/utils/mr";
 import {
@@ -25,7 +25,7 @@ export interface LoadContext {
   api: GitLabApi;
   signal: AbortSignal;
   userId: number | null;
-  settings: Pick<Settings, "approvalsNeeded">;
+  settings: Pick<Settings, "approvalsSource" | "approvalsNeeded">;
 }
 
 export interface Activity {
@@ -111,7 +111,7 @@ export function computeActivity(notes: Note[], userId: number | null): Activity 
 
 // Combine a stage 2 node with (possibly not yet refreshed) per-user activity for UI
 export function processMRData(ctx: LoadContext, mr: MrNode, activity: Activity | null | undefined): MrData {
-  const approvalsRequired = ctx.settings.approvalsNeeded;
+  const approvalsRequired = requiredApprovals(ctx.settings, mr.approvalsRequired);
   const approvedByIds = (mr.approvedBy?.nodes || []).map((user) => parseUserId(user.id));
   const approvalsGiven = approvedByIds.length;
   const status = mr.detailedMergeStatus;
