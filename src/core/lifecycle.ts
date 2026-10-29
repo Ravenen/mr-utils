@@ -5,12 +5,15 @@ import { isAbortError } from "@/utils/async";
 
 export interface FeatureContext<R extends Route = Route> {
   route: R;
-  // Fires when the feature is superseded (navigation to another key) or the extension is unloaded.
-  // Pass it to every request and wait; check it after every await.
+  // Fires when the feature is superseded (navigation to another key, a change of one of its settings)
+  // or the extension is unloaded. Pass it to every request and wait; check it after every await.
   signal: AbortSignal;
   settings: Settings;
   userId: number | null;
   api: GitLabApi;
+  // Lives as long as the page (the route key): kept when a feature remounts after a settings change,
+  // dropped on navigation. For data already loaded on this page, so that a remount needs no requests.
+  cache: Map<string, unknown>;
   // Run fn on unmount (right away if already unmounted). Everything a feature adds to the page must
   // be removed here, so that mounting again is idempotent.
   onCleanup(fn: () => void): void;
@@ -20,6 +23,8 @@ export interface FeatureContext<R extends Route = Route> {
 export interface Feature<R extends Route = Route> {
   name: string;
   match(route: Route): route is R;
+  // The settings it reads: it remounts only when one of these changes (any change when not given)
+  settings?: readonly (keyof Settings)[];
   mount(ctx: FeatureContext<R>): void | Promise<void>;
 }
 
@@ -32,57 +37,108 @@ export interface Dependencies {
   watchUrl?: typeof watchUrl;
 }
 
-// Mounts the features matching the current route and remounts them on every navigation that changes
-// the route key, and when the settings change. The previous mount is aborted and cleaned up first.
+interface Page {
+  key: string;
+  route: Route;
+  controller: AbortController;
+  cache: Map<string, unknown>;
+  settings: Settings | null;
+  userId: number | null;
+  mounted: Map<Feature, AbortController>;
+}
+
+// Mounts the features matching the current route. A navigation that changes the route key unmounts
+// them all and mounts the new page's; a settings change remounts only the features that read a
+// changed setting. An unmount aborts the feature's signal and runs its cleanups.
 export function startFeatures(features: Feature[], deps: Dependencies, signal: AbortSignal): void {
-  let current: { key: string; controller: AbortController } | null = null;
+  let page: Page | null = null;
 
-  const navigate = (href: string, { remount = false } = {}) => {
-    const route = parseRoute(href);
-    if (current?.key === route.key && !remount) return;
-    current?.controller.abort();
-    if (signal.aborted) return;
-
+  const mountFeature = (current: Page, feature: Feature) => {
     const controller = new AbortController();
-    signal.addEventListener("abort", () => controller.abort(), { once: true, signal: controller.signal });
-    current = { key: route.key, controller };
-    void mount(
-      features.filter((feature) => feature.match(route)),
-      route,
-      controller.signal,
-    );
-  };
-
-  const mount = async (matching: Feature[], route: Route, mountSignal: AbortSignal) => {
-    if (matching.length === 0) return;
-    const [settings, userId] = await Promise.all([deps.loadSettings(), deps.getCurrentUserId(mountSignal)]);
-    if (mountSignal.aborted) return;
-
+    current.controller.signal.addEventListener("abort", () => controller.abort(), {
+      once: true,
+      signal: controller.signal,
+    });
+    current.mounted.set(feature, controller);
+    const featureSignal = controller.signal;
     const ctx: FeatureContext = {
-      route,
-      signal: mountSignal,
-      settings,
-      userId,
+      route: current.route,
+      signal: featureSignal,
+      settings: current.settings as Settings,
+      userId: current.userId,
       api: deps.api,
+      cache: current.cache,
       onCleanup(fn) {
-        if (mountSignal.aborted) runCleanup(fn);
-        else mountSignal.addEventListener("abort", () => runCleanup(fn), { once: true });
+        if (featureSignal.aborted) runCleanup(fn);
+        else featureSignal.addEventListener("abort", () => runCleanup(fn), { once: true });
       },
     };
-    await Promise.all(
-      matching.map(async (feature) => {
-        try {
-          await feature.mount(ctx);
-        } catch (error) {
-          if (!mountSignal.aborted || !isAbortError(error)) console.error(`MRFlow: ${feature.name} failed`, error);
-        }
-      }),
-    );
+    void (async () => {
+      try {
+        await feature.mount(ctx);
+      } catch (error) {
+        if (!featureSignal.aborted || !isAbortError(error)) console.error(`MRFlow: ${feature.name} failed`, error);
+      }
+    })();
+  };
+
+  const navigate = (href: string) => {
+    const route = parseRoute(href);
+    if (page?.key === route.key) return;
+    page?.controller.abort();
+    if (signal.aborted) return;
+
+    const current: Page = {
+      key: route.key,
+      route,
+      controller: new AbortController(),
+      cache: new Map(),
+      settings: null,
+      userId: null,
+      mounted: new Map(),
+    };
+    signal.addEventListener("abort", () => current.controller.abort(), {
+      once: true,
+      signal: current.controller.signal,
+    });
+    page = current;
+    void start(current);
+  };
+
+  const start = async (current: Page) => {
+    const matching = features.filter((feature) => feature.match(current.route));
+    if (matching.length === 0) return;
+    const [settings, userId] = await Promise.all([
+      deps.loadSettings(),
+      deps.getCurrentUserId(current.controller.signal),
+    ]);
+    if (current.controller.signal.aborted) return;
+    // A settings change while loading may have set newer settings already
+    current.settings ??= settings;
+    current.userId = userId;
+    matching.forEach((feature) => mountFeature(current, feature));
+  };
+
+  const onSettingsChange = async () => {
+    const current = page;
+    if (!current) return;
+    const settings = await deps.loadSettings();
+    if (current.controller.signal.aborted) return;
+    const previous = current.settings;
+    current.settings = settings;
+    if (!previous) return; // still starting: it mounts with these settings
+
+    for (const [feature, controller] of current.mounted) {
+      const keys = feature.settings ?? (Object.keys(settings) as (keyof Settings)[]);
+      if (!keys.some((key) => previous[key] !== settings[key])) continue;
+      controller.abort();
+      mountFeature(current, feature);
+    }
   };
 
   (deps.watchUrl ?? watchUrl)(navigate, signal);
-  deps.watchSettings?.(() => navigate(location.href, { remount: true }), signal);
-  signal.addEventListener("abort", () => current?.controller.abort(), { once: true });
+  deps.watchSettings?.(() => void onSettingsChange(), signal);
+  signal.addEventListener("abort", () => page?.controller.abort(), { once: true });
   navigate(location.href);
 }
 

@@ -22,6 +22,7 @@ const CARD_SHIFT_MS = 250;
 export const mrListFeature: Feature<MrListRoute> = {
   name: "mr-list",
   match: (route): route is MrListRoute => route.kind === "mr-list",
+  settings: ["kanbanView", "boardLoading", "animateCards", "approvalsSource", "approvalsNeeded"],
   async mount(ctx) {
     // The board only makes sense for open MRs
     const state = ctx.route.url.searchParams.get("state");
@@ -64,23 +65,36 @@ function watchList(ctx: FeatureContext, list: HTMLElement, onChange: () => void)
   ctx.onCleanup(() => observer.disconnect());
 }
 
+// Details already loaded on this page, so that remounting after a settings change (e.g. turning the
+// board on or off) needs no requests. MR data depends on the approvals settings, so they key it.
+function loadedData(ctx: FeatureContext): Map<string, MrData> {
+  const key = `mr-list/data:${ctx.settings.approvalsSource}:${ctx.settings.approvalsNeeded}`;
+  let data = ctx.cache.get(key) as Map<string, MrData> | undefined;
+  if (!data) {
+    data = new Map();
+    ctx.cache.set(key, data);
+  }
+  return data;
+}
+
 // Native list view: decorate the native items once all details are in
 async function decorateNativeList(ctx: FeatureContext, list: HTMLElement, onError: (error: unknown) => void) {
-  let items = readItems(list);
-  const data = new Map<string, MrData>();
+  const data = loadedData(ctx);
   const decorate = (item: Item) => {
     const mrData = data.get(item.key);
     if (mrData) decorateMergeRequest(item.element, mrData, { highlightApproved: true });
   };
   ctx.onCleanup(() => readItems(list).forEach((item) => clearDecorations(item.element)));
 
-  await loadMergeRequestsData(ctx, items, {
-    onError,
-    onUpdate: (updates) => updates.forEach(([item, mrData]) => data.set(item.key, mrData)),
-  });
+  const missing = readItems(list).filter((item) => !data.has(item.key));
+  if (missing.length > 0) {
+    await loadMergeRequestsData(ctx, missing, {
+      onError,
+      onUpdate: (updates) => updates.forEach(([item, mrData]) => data.set(item.key, mrData)),
+    });
+  }
   if (ctx.signal.aborted) return;
-  items = readItems(list);
-  items.forEach(decorate);
+  readItems(list).forEach(decorate);
   watchList(ctx, list, () => readItems(list).forEach(decorate));
 }
 
@@ -100,11 +114,13 @@ async function mountBoard(ctx: FeatureContext, list: HTMLElement, onError: (erro
   });
 
   let items = readItems(list);
-  // Latest data per MR: the stored record first, then what the API returns
+  // Latest data per MR: what this page already loaded, else the stored record until the API answers
+  const loaded = loadedData(ctx);
   const data = new Map<string, MrData | null>();
   const remember = (item: Item) => {
-    if (!data.has(item.key)) data.set(item.key, readMrRecord(ctx.userId, item)?.mrData ?? null);
+    if (!data.has(item.key)) data.set(item.key, loaded.get(item.key) ?? readMrRecord(ctx.userId, item)?.mrData ?? null);
   };
+  const needsLoading = (toLoad: Item[]) => toLoad.filter((item) => !loaded.has(item.key));
 
   const render = (item: Item) => {
     const mrData = data.get(item.key);
@@ -159,7 +175,10 @@ async function mountBoard(ctx: FeatureContext, list: HTMLElement, onError: (erro
         progressive: ctx.settings.boardLoading === "progressive",
         onUpdate: (updates) =>
           animateMoves(() => {
-            updates.forEach(([item, mrData]) => data.set(item.key, mrData));
+            updates.forEach(([item, mrData]) => {
+              data.set(item.key, mrData);
+              loaded.set(item.key, mrData);
+            });
             const updated = new Set(updates.map(([item]) => item.key));
             items.filter((item) => updated.has(item.key)).forEach(render);
             board.updateCounts();
@@ -182,9 +201,10 @@ async function mountBoard(ctx: FeatureContext, list: HTMLElement, onError: (erro
     fresh.forEach(remember);
     items.filter((item) => item.element.dataset.mrflowColumn === undefined).forEach(render);
     board.updateCounts();
-    void load(fresh);
+    void load(needsLoading(fresh));
   });
 
-  // Stages 2 and 3: details from the API; updates come per batch or, by default, once per stage
-  await load(items);
+  // Stages 2 and 3: details from the API, for MRs not loaded on this page yet; updates come per batch
+  // or, by default, once per stage
+  await load(needsLoading(items));
 }

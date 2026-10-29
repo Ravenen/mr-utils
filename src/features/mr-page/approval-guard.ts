@@ -19,6 +19,7 @@ const HIDDEN = "mrflow-hidden";
 export const approvalGuardFeature: Feature<MrPageRoute> = {
   name: "approval-guard",
   match: (route): route is MrPageRoute => route.kind === "mr-page",
+  settings: ["approvalGuard", "resetChecksOnNewCommits"],
   async mount(ctx) {
     if (!ctx.settings.approvalGuard) return;
     const { mrPath } = ctx.route;

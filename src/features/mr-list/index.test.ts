@@ -97,6 +97,68 @@ describe("MR list board", () => {
   });
 });
 
+describe("MR list remounted after a settings change", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    document.body.innerHTML = "";
+    document.head.innerHTML = "";
+  });
+
+  it("turns the board off and on again with the details already loaded, without requests", async () => {
+    document.body.innerHTML = mrList(4);
+    let requests = 0;
+    const api = fakeApi(nodes);
+    const counting = {
+      ...api,
+      graphql: (...args: Parameters<typeof api.graphql>) => (requests++, api.graphql(...args)),
+    };
+    const first = featureContext<MrListRoute>("/g/p/-/merge_requests", counting as typeof api);
+    await mrListFeature.mount(first.ctx);
+    expect(requests).toBeGreaterThan(0);
+
+    requests = 0;
+    first.unmount();
+    const off = featureContext<MrListRoute>(
+      "/g/p/-/merge_requests",
+      counting as typeof api,
+      { kanbanView: false },
+      first.ctx.cache,
+    );
+    await mrListFeature.mount(off.ctx);
+    expect(item(1).hasAttribute("data-mrflow-approved")).toBe(true);
+
+    off.unmount();
+    const on = featureContext<MrListRoute>("/g/p/-/merge_requests", counting as typeof api, {}, first.ctx.cache);
+    await mrListFeature.mount(on.ctx);
+    expect(column("approved")).toEqual(["MR 1"]);
+    expect(requests).toBe(0);
+  });
+
+  it("loads again when the approvals settings change, as the badges depend on them", async () => {
+    document.body.innerHTML = mrList(2);
+    let requests = 0;
+    const api = fakeApi(nodes);
+    const counting = {
+      ...api,
+      graphql: (...args: Parameters<typeof api.graphql>) => (requests++, api.graphql(...args)),
+    };
+    const first = featureContext<MrListRoute>("/g/p/-/merge_requests", counting as typeof api);
+    await mrListFeature.mount(first.ctx);
+    first.unmount();
+
+    requests = 0;
+    const next = featureContext<MrListRoute>(
+      "/g/p/-/merge_requests",
+      counting as typeof api,
+      { approvalsNeeded: 1 },
+      first.ctx.cache,
+    );
+    await mrListFeature.mount(next.ctx);
+    expect(requests).toBeGreaterThan(0);
+    expect(item(1).querySelector(".mrflow-approvals-badge")?.textContent).toBe("1/1");
+  });
+});
+
 describe("MR list without the board", () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => {

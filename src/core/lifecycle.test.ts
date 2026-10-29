@@ -158,6 +158,42 @@ describe("startFeatures", () => {
     expect(seen).toEqual([true, false]);
   });
 
+  it("remounts only the features that read a changed setting, and keeps the page cache for them", async () => {
+    vi.useFakeTimers();
+    history.replaceState(null, "", "/g/p/-/merge_requests/1");
+    const log: string[] = [];
+    const caches: Map<string, unknown>[] = [];
+    const feature = (name: string, settings: (keyof Settings)[]): Feature => ({
+      name,
+      settings,
+      match: (route): route is Route => route.kind === "mr-page",
+      mount(ctx) {
+        log.push(`mount ${name}`);
+        caches.push(ctx.cache);
+        ctx.onCleanup(() => log.push(`cleanup ${name}`));
+      },
+    });
+    const { changeSettings, navigate } = setup([feature("guard", ["approvalGuard"]), feature("seen", [])]);
+    await flush();
+    log.length = 0;
+
+    changeSettings({ approvalGuard: false });
+    await flush();
+    expect(log).toEqual(["cleanup guard", "mount guard"]);
+
+    // A setting nobody reads remounts nothing
+    log.length = 0;
+    changeSettings({ animateCards: false });
+    await flush();
+    expect(log).toEqual([]);
+
+    // Same page, same cache; a new page gets a new one
+    expect(new Set(caches).size).toBe(1);
+    navigate("/g/p/-/merge_requests/2");
+    await flush();
+    expect(caches.at(-1)).not.toBe(caches[0]);
+  });
+
   it("unmounts everything when the extension is unloaded", async () => {
     vi.useFakeTimers();
     history.replaceState(null, "", "/g/p/-/merge_requests");

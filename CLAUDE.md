@@ -6,11 +6,11 @@ Browser extension (Manifest V3, Chrome + Firefox) that enhances GitLab merge req
 Built with WXT (Vite) + TypeScript, pnpm. Source in `src/`, output in `.output/`.
 - `src/entrypoints/gitlab.content/`: content script for GitLab pages (`index.ts` + injected `style.css`); only starts the features.
 - `src/core/router.ts`: `parseRoute` (MR list by scope, MR page and tab, other) and `watchUrl` (SPA navigation).
-- `src/core/lifecycle.ts`: `Feature { name, match(route), mount(ctx) }` and `startFeatures`. Features remount when the route key changes (a list: any filter/sort/page; an MR: not on tab switches).
+- `src/core/lifecycle.ts`: `Feature { name, match(route), settings?, mount(ctx) }` and `startFeatures`. Features remount when the route key changes (a list: any filter/sort/page; an MR: not on tab switches), and when a setting listed in `settings` changes (only that feature). `ctx.cache` lives as long as the page, so a remount after a settings change reuses data instead of requesting it again.
 - `src/features/`: the registry (`index.ts`); `mr-list/` (Kanban laid over the native list in `board.ts`, badges and banners in `decorate.ts`), `mr-page/` (seen state, approval guard).
 - `src/core/gitlab/`: `api.ts` (`createGitLabApi`: limiter, retries, shared GraphQL requests; one instance per page), `queries.ts` (GraphQL queries and response types), `merge-requests.ts` (the three loading stages, `computeActivity`, `processMRData`). No DOM access here; tests count the requests per scenario.
 - `src/core/storage/`: `mr-records.ts` (last shown data per MR), `mr-state.ts` (per-MR state).
-- `src/core/settings/`: `schema.ts` (versioned `Settings`, `normalizeSettings`, `migrateSettings` from the 1.x flat keys, `requiredApprovals`), `store.ts` (`storage.sync` key `settings`, `watchSettings`, import/export). Features remount when settings change.
+- `src/core/settings/`: `schema.ts` (versioned `Settings`, `normalizeSettings`, `migrateSettings` from the 1.x flat keys, `requiredApprovals`), `store.ts` (`storage.sync` key `settings`, `watchSettings`, import/export). A feature remounts only when a setting it lists changes.
 - `src/core/gitlab/dom.ts`: every GitLab selector, stable hooks (`data-testid`, `js-` classes) first with fallbacks to older markup.
 - `src/ui/`: native components (`badge.ts`, `alert.ts`, `checkbox.ts`, `spinner.ts`, `icons.ts`).
 - `src/test/fixtures.ts`: GitLab markup trimmed from GitLab's own components, a fake API and a feature context for tests.
