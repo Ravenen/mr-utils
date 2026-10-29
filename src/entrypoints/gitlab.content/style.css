@@ -119,12 +119,24 @@ span.badge-pill:has(+ span.badge-pill) {
   filter: none;
 }
 
-/* Approved MR highlight */
+/* Approved MR highlight in the native list (board off). Success feedback color: green-50 light, green-900 dark */
 .greened {
-  background-color: rgba(0, 149, 0, 0.1) !important;
+  background-color: var(--gl-feedback-success-background-color, rgba(0, 149, 0, 0.1)) !important;
 }
 
 /* Column count */
 .kanban-count {
   color: var(--gl-text-color-subtle);
+}
+
+/* Native MR list moved off screen under the board: GitLab keeps rendering it, cards are cloned from it */
+.mrflow-offscreen {
+  visibility: hidden;
+  position: absolute;
+  left: -9999px;
+}
+
+/* Approve button / merge section hidden until every check is ticked */
+.mrflow-hidden {
+  display: none !important;
 }
