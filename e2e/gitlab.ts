@@ -1,5 +1,6 @@
 import type { BrowserContext, Route } from "@playwright/test";
-import { listPage, mrPage } from "./pages";
+import type { DiffFileSpec, DiffsOptions } from "../src/test/diffs-markup";
+import { diffsPage, listPage, mrPage } from "./pages";
 
 export const ME = 7;
 const gid = (id: number) => `gid://gitlab/User/${id}`;
@@ -31,6 +32,9 @@ export class MockGitLab {
   rateLimitedFor: number | null = null;
   redirectList = false;
   canApprove = true;
+  // The Changes tab of every MR
+  diffs: DiffFileSpec[] = [];
+  diffsOptions: DiffsOptions & { lazy?: boolean } = {};
 
   constructor(
     readonly projectPath = "group/project",
@@ -117,10 +121,12 @@ export class MockGitLab {
       return route.fulfill({ json: { data: { project: { mergeRequests: { nodes } } } } });
     }
 
-    const mrPageMatch = path.match(/\/-\/merge_requests\/(\d+)/);
-    const html = mrPageMatch
-      ? mrPage({ canApprove: this.canApprove })
-      : listPage(this.projectPath, [...this.mrs.keys()], { redirect: this.redirectList });
+    const mrPageMatch = path.match(/\/-\/merge_requests\/(\d+)(\/diffs)?/);
+    const html = mrPageMatch?.[2]
+      ? diffsPage(this.diffs, this.diffsOptions)
+      : mrPageMatch
+        ? mrPage({ canApprove: this.canApprove })
+        : listPage(this.projectPath, [...this.mrs.keys()], { redirect: this.redirectList });
     return route.fulfill({ contentType: "text/html", body: html });
   }
 }

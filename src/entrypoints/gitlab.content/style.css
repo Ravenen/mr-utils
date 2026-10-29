@@ -179,3 +179,53 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
 .mrflow-hidden {
   display: none !important;
 }
+
+/* == MR changes: hunk review (features/mr-page/hunk-review.ts) == */
+
+/* GitLab's "@@" row holds the checkbox at its right end, over the header text's free space */
+[data-mrflow-hunk-header] {
+  position: relative;
+}
+
+/* Our header row for the hunk at the top of a file, which GitLab shows without one. Hunk header colors. */
+.mrflow-hunk-header {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 1.6em;
+  background-color: var(
+    --code-diff-hunk-header-background-color,
+    var(--diff-expansion-background-color, var(--gl-background-color-strong))
+  );
+}
+
+.mrflow-hunk-control {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--gl-spacing-scale-5, 1rem);
+  border: 0 !important;
+  background: none !important;
+  font-family: var(--gl-font-family-regular, var(--default-regular-font, sans-serif));
+  font-size: 0.75rem;
+  line-height: 1rem;
+  white-space: nowrap;
+}
+
+/* No taller than the row: GitLab's checkbox reserves 1.5rem and its label has a bottom margin,
+   which would put the box above the row's middle */
+.mrflow-hunk-control .gl-form-checkbox.custom-control {
+  min-height: 1rem;
+  margin: 0;
+}
+
+.mrflow-hunk-control .gl-form-checkbox.custom-control .custom-control-input ~ .custom-control-label {
+  color: var(--gl-text-color-subtle);
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}

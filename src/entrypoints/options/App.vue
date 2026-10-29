@@ -21,6 +21,7 @@ const boardLoading = field("boardLoading");
 const animateCards = field("animateCards");
 const approvalGuard = field("approvalGuard");
 const resetChecksOnNewCommits = field("resetChecksOnNewCommits");
+const hunkReview = field("hunkReview");
 
 const approvalsInvalid = ref(false);
 function setApprovalsNeeded(event: Event) {
@@ -126,6 +127,15 @@ async function importFile(event: Event) {
           v-model="resetChecksOnNewCommits"
           label="Reset checks on new commits"
           help="Unticks the checklist when the source branch gets new commits."
+        />
+      </section>
+
+      <section class="gl-card" aria-labelledby="changes-heading">
+        <h2 id="changes-heading">Changes</h2>
+        <GlToggle
+          v-model="hunkReview"
+          label="Hunk review"
+          help="A Viewed checkbox on every hunk, not only on the whole file."
         />
       </section>
 

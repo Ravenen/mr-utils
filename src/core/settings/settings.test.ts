@@ -36,6 +36,7 @@ describe("migrateSettings", () => {
       animateCards: false,
       approvalGuard: true,
       resetChecksOnNewCommits: false,
+      hunkReview: true,
     });
   });
 
@@ -54,6 +55,12 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ approvalsNeeded: 0, boardLoading: "fast", kanbanView: "yes", extra: 1 })).toEqual(
       DEFAULT_SETTINGS,
     );
+  });
+
+  it("turns a feature added after the stored settings on", () => {
+    const older: Partial<typeof DEFAULT_SETTINGS> = { ...DEFAULT_SETTINGS, kanbanView: false };
+    delete older.hunkReview;
+    expect(normalizeSettings(older)).toEqual({ ...DEFAULT_SETTINGS, kanbanView: false });
   });
 });
 

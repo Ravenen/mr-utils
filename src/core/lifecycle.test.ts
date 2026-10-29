@@ -14,6 +14,7 @@ const SETTINGS: Settings = {
   animateCards: true,
   approvalGuard: true,
   resetChecksOnNewCommits: true,
+  hunkReview: true,
 };
 
 // Navigation is driven by hand instead of by DOM mutations

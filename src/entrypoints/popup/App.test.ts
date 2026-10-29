@@ -15,12 +15,13 @@ describe("popup", () => {
     const wrapper = mount(App);
     await flushPromises();
 
-    const [board, guard] = wrapper.findAll("button[role=switch]");
+    const [board, guard, hunks] = wrapper.findAll("button[role=switch]");
     expect(board?.attributes("aria-checked")).toBe("true");
     await board?.trigger("click");
     await guard?.trigger("click");
+    await hunks?.trigger("click");
     await flushPromises();
-    expect(await loadSettings()).toMatchObject({ kanbanView: false, approvalGuard: false });
+    expect(await loadSettings()).toMatchObject({ kanbanView: false, approvalGuard: false, hunkReview: false });
 
     await wrapper.find(".gl-button-link").trigger("click");
     expect(openOptionsPage).toHaveBeenCalled();

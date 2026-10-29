@@ -98,3 +98,137 @@ export function mergeSection(doc: Document = document): HTMLElement | null {
     null
   );
 }
+
+// == MR changes (diffs) ==
+// Two renderers: the Vue diffs app (diff_file.vue, diff_view.vue, diff_row.vue) and Rapid Diffs
+// (server-rendered app/components/rapid_diffs, the default on gitlab.com). Both are read into the
+// same shape here, so the features never see which one the page uses.
+
+export type DiffChange = "added" | "removed";
+
+export interface DiffLine {
+  change: DiffChange;
+  // The code without the +/- marker
+  text: string;
+}
+
+export interface DiffHunk {
+  // The "@@ -1,5 +1,6 @@" row; null for a hunk at the top of the file, which has none
+  header: HTMLElement | null;
+  // The hunk's line rows, in order (context, changed and expanded lines)
+  rows: HTMLElement[];
+  // Changed lines grouped in runs without context between them; in a run, removed lines come
+  // before added ones in both inline and side-by-side views
+  blocks: DiffLine[][];
+}
+
+export interface DiffFile {
+  root: HTMLElement;
+  path: string;
+  // Differs from path for a renamed file
+  oldPath: string;
+  // GitLab's own "Viewed" checkbox; null when reviews are off or the user is signed out
+  viewed: HTMLInputElement | null;
+  // Hunks with at least one changed line; none while the file is collapsed or still loading
+  hunks: DiffHunk[];
+}
+
+// Every diff file on the page, in page order
+export function diffFiles(root: ParentNode = document): DiffFile[] {
+  return [
+    ...[...root.querySelectorAll<HTMLElement>("diff-file[data-testid='rd-diff-file']")].map(rapidDiffFile),
+    ...[...root.querySelectorAll<HTMLElement>(".diff-file.file-holder")].map(vueDiffFile),
+  ];
+}
+
+function rapidDiffFile(root: HTMLElement): DiffFile {
+  let data: { new_path?: string; old_path?: string } = {};
+  try {
+    data = JSON.parse(root.dataset.fileData ?? "{}");
+  } catch {
+    // Keep the empty paths: the file is still shown, it just cannot be told apart
+  }
+  const path = data.new_path ?? "";
+  const rows = [...root.querySelectorAll<HTMLElement>("tr[data-hunk-header], tr[data-hunk-lines]")];
+  return {
+    root,
+    path,
+    oldPath: data.old_path ?? path,
+    viewed: root.querySelector<HTMLInputElement>("input[data-viewed-checkbox]"),
+    hunks: splitHunks(
+      rows,
+      (row) => row.hasAttribute("data-hunk-header"),
+      (row) =>
+        [...row.querySelectorAll<HTMLElement>("td.rd-line-content[data-change]")].flatMap((cell) => {
+          const change = cell.dataset.change;
+          if (change !== "added" && change !== "removed") return [];
+          return [{ change, text: (cell.querySelector(".rd-line-text")?.textContent ?? "").replace(/\n$/, "") }];
+        }),
+    ),
+  };
+}
+
+function vueDiffFile(root: HTMLElement): DiffFile {
+  const path = root.dataset.path ?? "";
+  // The header's checkbox: GitLab puts the test id on the <input> (inheritAttrs: false) or its wrapper
+  const review = root.querySelector(".file-title [data-testid='fileReviewCheckbox']");
+  const viewed = review instanceof HTMLInputElement ? review : (review?.querySelector("input") ?? null);
+  // Rows of the grid (diff_view.vue) or of the older table; comment rows (notes_holder) are skipped
+  const rows = [...root.querySelectorAll<HTMLElement>(".diff-content .line_holder")];
+  return {
+    root,
+    path,
+    oldPath: root.dataset.oldPath ?? path,
+    viewed,
+    hunks: splitHunks(
+      rows,
+      (row) => row.classList.contains("match"),
+      (row) =>
+        [...row.querySelectorAll<HTMLElement>(".line_content")].flatMap((cell) => {
+          const change = cell.classList.contains("new") ? "added" : cell.classList.contains("old") ? "removed" : null;
+          return change ? [{ change, text: cell.textContent ?? "" } as DiffLine] : [];
+        }),
+    ),
+  };
+}
+
+// Rows to hunks: a header row starts a new one. Changed lines of consecutive rows make a block.
+function splitHunks(
+  rows: HTMLElement[],
+  isHeader: (row: HTMLElement) => boolean,
+  changes: (row: HTMLElement) => DiffLine[],
+): DiffHunk[] {
+  const hunks: DiffHunk[] = [];
+  let hunk: DiffHunk | null = null;
+  let block: DiffLine[] | null = null;
+  const closeBlock = () => {
+    if (block && hunk) {
+      // Side by side pairs a removed and an added line per row: put them in inline order
+      hunk.blocks.push([
+        ...block.filter((line) => line.change === "removed"),
+        ...block.filter((line) => line.change === "added"),
+      ]);
+    }
+    block = null;
+  };
+
+  for (const row of rows) {
+    if (isHeader(row)) {
+      closeBlock();
+      hunk = { header: row, rows: [], blocks: [] };
+      hunks.push(hunk);
+      continue;
+    }
+    if (!hunk) {
+      hunk = { header: null, rows: [], blocks: [] };
+      hunks.push(hunk);
+    }
+    hunk.rows.push(row);
+    const lines = changes(row);
+    if (lines.length === 0) closeBlock();
+    else (block ??= []).push(...lines);
+  }
+  closeBlock();
+  // A header after the last hunk only expands the rest of the file
+  return hunks.filter((h) => h.blocks.length > 0);
+}

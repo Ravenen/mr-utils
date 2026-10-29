@@ -14,6 +14,10 @@ const approvalGuard = computed({
   get: () => settings.value?.approvalGuard ?? false,
   set: (value: boolean) => void update({ approvalGuard: value }),
 });
+const hunkReview = computed({
+  get: () => settings.value?.hunkReview ?? false,
+  set: (value: boolean) => void update({ hunkReview: value }),
+});
 
 function openOptions() {
   void browser.runtime.openOptionsPage();
@@ -27,6 +31,7 @@ function openOptions() {
     <template v-if="settings">
       <GlToggle v-model="kanbanView" label="Kanban board" help="On the merge request list" />
       <GlToggle v-model="approvalGuard" label="Approval checklist" help="On the merge request page" />
+      <GlToggle v-model="hunkReview" label="Hunk review" help="On the Changes tab" />
     </template>
     <div class="mrflow-popup-footer">
       <button type="button" class="gl-button gl-button-link" @click="openOptions">All settings</button>

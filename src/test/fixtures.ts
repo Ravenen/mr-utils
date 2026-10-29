@@ -118,6 +118,7 @@ export const SETTINGS: Settings = {
   animateCards: false,
   approvalGuard: true,
   resetChecksOnNewCommits: true,
+  hunkReview: true,
 };
 
 // A mount context for one feature, as startFeatures builds it. Pass the cache of an earlier context to
