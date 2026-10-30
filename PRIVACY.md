@@ -1,6 +1,6 @@
 # MRFlow privacy policy
 
-MRFlow is a browser extension that adds a Kanban board, badges and an approval checklist to GitLab merge request pages on gitlab.com.
+MRFlow is a browser extension that adds a Kanban board, badges, an approval checklist and per-hunk review marks to GitLab merge request pages on gitlab.com.
 
 ## What MRFlow reads
 
@@ -13,6 +13,7 @@ Only in your browser:
 
 - Settings, in the extension's sync storage. If you sign in to your browser, the browser syncs them between your devices.
 - What you last saw on each merge request (commit, number of comments) and the state of your approval checklist, in gitlab.com's local storage in your browser. Records not used for 30 days are deleted.
+- Which blocks of changed code you marked as viewed on each merge request (a hash of the file path and the changed lines, not the code itself), in the extension's local storage. Records not used for 60 days, and those of merged or closed merge requests, are deleted.
 
 ## What MRFlow sends
 

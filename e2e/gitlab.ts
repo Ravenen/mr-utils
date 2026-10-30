@@ -15,6 +15,7 @@ export interface MockMr {
   // Comments from someone else (plain, not threads)
   otherComments?: number;
   updatedAt?: string;
+  state?: "opened" | "merged" | "closed";
 }
 
 interface Note {
@@ -76,6 +77,7 @@ export class MockGitLab {
     return {
       iid: String(mr.iid),
       webUrl: `https://gitlab.com/${this.projectPath}/-/merge_requests/${mr.iid}`,
+      state: mr.state ?? "opened",
       draft: mr.draft ?? false,
       updatedAt: mr.updatedAt ?? "2026-10-01T00:00:00Z",
       detailedMergeStatus: mr.conflicts ? "CONFLICT" : "MERGEABLE",

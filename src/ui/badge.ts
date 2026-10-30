@@ -1,6 +1,6 @@
 import { prependIcon } from "./icons";
 
-export type BadgeVariant = "success" | "danger" | "warning" | "info" | "tier";
+export type BadgeVariant = "success" | "danger" | "warning" | "info" | "tier" | "neutral";
 
 // Pill badge (counts: threads, approvals)
 export function badge(text: string, title: string, variant: BadgeVariant): HTMLSpanElement {

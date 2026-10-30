@@ -1,10 +1,14 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { diffFilesMarkup, SAMPLE_DIFF } from "@/test/diffs-markup";
+import { diffFilesMarkup, diffTreeMarkup, hashOf, SAMPLE_DIFF } from "@/test/diffs-markup";
 import { mrList, mrPage } from "@/test/fixtures";
 import {
   approvalsWidget,
+  diffFileRoot,
+  diffFileRootsIn,
   diffFiles,
+  diffTreeRows,
+  isDiffFileViewedCheckbox,
   type DiffFile,
   iconSpriteUrl,
   isRevokeApprovalButton,
@@ -143,5 +147,25 @@ describe("MR changes", () => {
       <tr class="line_holder"><td class="line_content">b = 1</td></tr>
     </tbody></table></div></div>`;
     expect(blocks(diffFiles()[0] as DiffFile)).toEqual([[["ra = 1", "aa = 2"]]]);
+  });
+
+  for (const renderer of ["vue", "rapid"] as const) {
+    it(`links files to the tree, their header and their Viewed checkbox (${renderer})`, () => {
+      document.body.innerHTML = diffTreeMarkup(SAMPLE_DIFF) + diffFilesMarkup(SAMPLE_DIFF, { renderer });
+      const [file] = diffFiles() as [DiffFile];
+      expect(file.id).toBe(hashOf("src/board.ts"));
+      expect(diffTreeRows().map((row) => row.fileId)).toEqual([hashOf("src/board.ts"), hashOf("README.md")]);
+      expect(file.headerSlot?.before?.contains(file.viewed)).toBe(true);
+      expect(isDiffFileViewedCheckbox(file.viewed)).toBe(true);
+      expect(isDiffFileViewedCheckbox(document.querySelector(".diff-tree-list button"))).toBe(false);
+      expect(diffFileRoot(file.hunks[0]?.rows[0] as Node)).toBe(file.root);
+      expect(diffFileRootsIn(document.body)).toHaveLength(2);
+      expect(diffFileRootsIn(file.root)).toEqual([file.root]);
+    });
+  }
+
+  it("puts header badges at the end of the controls without a Viewed checkbox", () => {
+    document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { reviews: false });
+    expect(diffFiles()[0]?.headerSlot).toMatchObject({ before: null });
   });
 });

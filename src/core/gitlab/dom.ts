@@ -124,21 +124,61 @@ export interface DiffHunk {
 
 export interface DiffFile {
   root: HTMLElement;
+  // GitLab's file hash: the root's id, also on the file's row in the file tree
+  id: string;
   path: string;
   // Differs from path for a renamed file
   oldPath: string;
   // GitLab's own "Viewed" checkbox; null when reviews are off or the user is signed out
   viewed: HTMLInputElement | null;
+  // Where a badge goes in the file header: before the Viewed checkbox, or at the end of the header's controls
+  headerSlot: { parent: HTMLElement; before: Element | null } | null;
   // Hunks with at least one changed line; none while the file is collapsed or still loading
   hunks: DiffHunk[];
 }
 
+const RAPID_FILE = "diff-file[data-testid='rd-diff-file']";
+const VUE_FILE = ".diff-file.file-holder";
+
 // Every diff file on the page, in page order
 export function diffFiles(root: ParentNode = document): DiffFile[] {
-  return [
-    ...[...root.querySelectorAll<HTMLElement>("diff-file[data-testid='rd-diff-file']")].map(rapidDiffFile),
-    ...[...root.querySelectorAll<HTMLElement>(".diff-file.file-holder")].map(vueDiffFile),
-  ];
+  return [...root.querySelectorAll<HTMLElement>(`${RAPID_FILE}, ${VUE_FILE}`)].map(readDiffFile);
+}
+
+// The diff file a node is in (or is), for reading only the files a change touched
+export function diffFileRoot(node: Node): HTMLElement | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element?.closest<HTMLElement>(`${RAPID_FILE}, ${VUE_FILE}`) ?? null;
+}
+
+// Diff files inside a node GitLab added (a batch of files, or a single one)
+export function diffFileRootsIn(node: Node): HTMLElement[] {
+  if (!(node instanceof Element)) return [];
+  const own = node.matches(`${RAPID_FILE}, ${VUE_FILE}`) ? [node as HTMLElement] : [];
+  return [...own, ...node.querySelectorAll<HTMLElement>(`${RAPID_FILE}, ${VUE_FILE}`)];
+}
+
+export function readDiffFile(root: HTMLElement): DiffFile {
+  return root.matches(RAPID_FILE) ? rapidDiffFile(root) : vueDiffFile(root);
+}
+
+// Is this GitLab's Viewed checkbox of a diff file?
+export function isDiffFileViewedCheckbox(element: EventTarget | null): element is HTMLInputElement {
+  return (
+    element instanceof HTMLInputElement &&
+    (element.matches("input[data-viewed-checkbox]") ||
+      element.matches(
+        `${VUE_FILE} .file-title [data-testid='fileReviewCheckbox'], ${VUE_FILE} .file-title [data-testid='fileReviewCheckbox'] input`,
+      ))
+  );
+}
+
+// Files in the file tree (the same Vue component in both renderers), by file hash
+export function diffTreeRows(root: ParentNode = document): { row: HTMLElement; fileId: string }[] {
+  return [...root.querySelectorAll<HTMLElement>("[data-testid='file-row'][data-file-row]")].map((row) => ({
+    row,
+    fileId: row.dataset.fileRow ?? "",
+  }));
 }
 
 function rapidDiffFile(root: HTMLElement): DiffFile {
@@ -149,12 +189,16 @@ function rapidDiffFile(root: HTMLElement): DiffFile {
     // Keep the empty paths: the file is still shown, it just cannot be told apart
   }
   const path = data.new_path ?? "";
+  const viewed = root.querySelector<HTMLInputElement>("input[data-viewed-checkbox]");
+  const info = root.querySelector<HTMLElement>(".rd-diff-file-info");
   const rows = [...root.querySelectorAll<HTMLElement>("tr[data-hunk-header], tr[data-hunk-lines]")];
   return {
     root,
+    id: root.id,
     path,
     oldPath: data.old_path ?? path,
-    viewed: root.querySelector<HTMLInputElement>("input[data-viewed-checkbox]"),
+    viewed,
+    headerSlot: info ? { parent: info, before: info.querySelector(".rd-viewed-toggle") } : null,
     hunks: splitHunks(
       rows,
       (row) => row.hasAttribute("data-hunk-header"),
@@ -173,13 +217,19 @@ function vueDiffFile(root: HTMLElement): DiffFile {
   // The header's checkbox: GitLab puts the test id on the <input> (inheritAttrs: false) or its wrapper
   const review = root.querySelector(".file-title [data-testid='fileReviewCheckbox']");
   const viewed = review instanceof HTMLInputElement ? review : (review?.querySelector("input") ?? null);
+  const actions = root.querySelector<HTMLElement>(".file-title .file-actions");
+  const reviewWrapper = viewed?.closest(".gl-form-checkbox") ?? null;
   // Rows of the grid (diff_view.vue) or of the older table; comment rows (notes_holder) are skipped
   const rows = [...root.querySelectorAll<HTMLElement>(".diff-content .line_holder")];
   return {
     root,
+    id: root.id,
     path,
     oldPath: root.dataset.oldPath ?? path,
     viewed,
+    headerSlot: actions
+      ? { parent: actions, before: reviewWrapper?.parentElement === actions ? reviewWrapper : null }
+      : null,
     hunks: splitHunks(
       rows,
       (row) => row.classList.contains("match"),
