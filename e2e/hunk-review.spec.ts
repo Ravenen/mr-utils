@@ -74,3 +74,42 @@ for (const renderer of ["vue", "rapid"] as const) {
     await expect(page.locator(".mrflow-hunk-progress").first()).toHaveText("1/2 hunks");
   });
 }
+
+test("viewed hunks collapse, the Changes tab counts the rest, and Shift+] goes to the next one", async ({
+  page,
+  gitlab,
+}) => {
+  // Enough hunks to scroll through
+  gitlab.diffs = Array.from({ length: 6 }, (_, i) => ({
+    path: `src/file${i}.ts`,
+    hunks: [
+      {
+        header: `@@ -1,30 +1,31 @@ file ${i}`,
+        lines: [...Array.from({ length: 30 }, (_, j) => ` line ${j}`), `+added in file ${i}`],
+      },
+    ],
+  }));
+  gitlab.diffsOptions = { renderer: "rapid" };
+  await page.setViewportSize({ width: 1000, height: 600 });
+  await page.goto(CHANGES);
+  const left = page.locator(".mrflow-hunks-left");
+  await expect(left).toHaveText("6 left");
+
+  // Viewed: the lines go, the header stays with a button to show them again
+  const file0 = page.locator("[data-testid='rd-diff-file']").nth(0);
+  await file0.locator(".mrflow-hunk-control label").click();
+  await expect(left).toHaveText("5 left");
+  await expect(file0.locator("tr[data-hunk-lines]").first()).toBeHidden();
+  await file0.getByRole("button", { name: "Show lines" }).click();
+  await expect(file0.locator("tr[data-hunk-lines]").first()).toBeVisible();
+
+  // Shift+] skips the viewed hunk and brings the next one to the middle of the window
+  await page.keyboard.press("Shift+BracketRight");
+  const header = page.locator("[data-testid='rd-diff-file']").nth(1).locator("tr[data-hunk-header]").first();
+  await expect
+    .poll(async () => {
+      const box = await header.boundingBox();
+      return box ? Math.abs(box.y + box.height / 2 - 300) < 40 : false;
+    })
+    .toBe(true);
+});

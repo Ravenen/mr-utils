@@ -22,6 +22,8 @@ Browser extension that makes GitLab merge requests easier to review. Works on gi
 - A **Viewed** checkbox on every hunk, not only on the whole file. Works with both GitLab diff renderers (Rapid Diffs and the older one), inline and side by side.
 - Marks belong to the changed lines, not to line numbers: after a new push, hunks it did not change stay viewed and changed ones are cleared.
 - Progress per file ("2/3 hunks") in the file header and the file tree. When every hunk of a file is viewed, GitLab's own **Viewed** checkbox of the file is ticked; unticking it clears the file's hunks.
+- Viewed hunks collapse to their header (a button shows the lines again), and the **Changes** tab counts the hunks left.
+- **Shift+]** / **Shift+[** go to the next / previous hunk not viewed yet (GitLab already uses `]` / `[` for files).
 
 ## Install
 
@@ -46,7 +48,7 @@ The extension icon opens a short panel to turn the Kanban board, the approval ch
 - **Required approvals**: from the project's approval rules (Premium), or always a fixed number; the number is also used for projects without rules.
 - **Kanban board**, **Board updates** (in waves, the default, or each card as soon as it loads) and **Animate cards moving between columns** (also off when the system asks for reduced motion).
 - **Approval checklist** and **Reset checks on new commits**.
-- **Hunk review**.
+- **Hunk review**, **Collapse viewed hunks** and **Keyboard shortcuts**.
 - **Export / Import** settings as JSON.
 
 Changes apply to open GitLab tabs right away. Settings from MRFlow 1.x are migrated on the first start.

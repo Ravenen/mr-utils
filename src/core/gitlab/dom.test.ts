@@ -4,6 +4,8 @@ import { diffFilesMarkup, diffTreeMarkup, hashOf, SAMPLE_DIFF } from "@/test/dif
 import { mrList, mrPage } from "@/test/fixtures";
 import {
   approvalsWidget,
+  changesTabLink,
+  hunkSpan,
   diffFileRoot,
   diffFileRootsIn,
   diffFiles,
@@ -167,5 +169,22 @@ describe("MR changes", () => {
   it("puts header badges at the end of the controls without a Viewed checkbox", () => {
     document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { reviews: false });
     expect(diffFiles()[0]?.headerSlot).toMatchObject({ before: null });
+  });
+
+  it("spans a hunk's rows and the comment rows between them", () => {
+    document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF);
+    const hunk = diffFiles()[0]?.hunks[1] as DiffFile["hunks"][number];
+    hunk.rows[0]?.insertAdjacentHTML("afterend", `<div class="diff-tr notes_holder">A comment</div>`);
+    const span = hunkSpan(hunk);
+    expect(span).toHaveLength(hunk.rows.length + 1);
+    expect(span[1]?.classList.contains("notes_holder")).toBe(true);
+    expect(span).not.toContain(hunk.header);
+  });
+
+  it("finds the Changes tab", () => {
+    document.body.innerHTML = `<li class="diffs-tab js-diffs-tab" data-testid="diffs-tab" id="diffs-tab"><a data-action="diffs">Changes</a></li>`;
+    expect(changesTabLink()?.dataset.action).toBe("diffs");
+    document.body.innerHTML = `<li class="diffs-tab js-diffs-tab"><a data-action="diffs">Changes</a></li>`;
+    expect(changesTabLink()).not.toBeNull();
   });
 });

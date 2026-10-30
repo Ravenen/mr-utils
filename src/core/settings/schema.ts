@@ -16,6 +16,10 @@ export interface Settings {
   resetChecksOnNewCommits: boolean;
   // "Viewed" checkboxes on the hunks of the Changes tab
   hunkReview: boolean;
+  // Hides the lines of a viewed hunk, as GitLab collapses a viewed file
+  hunkCollapseViewed: boolean;
+  // Shift+] / Shift+[: next / previous hunk not viewed
+  hunkHotkeys: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +32,8 @@ export const DEFAULT_SETTINGS: Settings = {
   approvalGuard: true,
   resetChecksOnNewCommits: true,
   hunkReview: true,
+  hunkCollapseViewed: true,
+  hunkHotkeys: true,
 };
 
 // Keys MRFlow 1.x kept at the top level of storage.sync
@@ -49,6 +55,8 @@ export function normalizeSettings(raw: unknown): Settings {
     approvalGuard: bool(value.approvalGuard, DEFAULT_SETTINGS.approvalGuard),
     resetChecksOnNewCommits: bool(value.resetChecksOnNewCommits, DEFAULT_SETTINGS.resetChecksOnNewCommits),
     hunkReview: bool(value.hunkReview, DEFAULT_SETTINGS.hunkReview),
+    hunkCollapseViewed: bool(value.hunkCollapseViewed, DEFAULT_SETTINGS.hunkCollapseViewed),
+    hunkHotkeys: bool(value.hunkHotkeys, DEFAULT_SETTINGS.hunkHotkeys),
   };
 }
 

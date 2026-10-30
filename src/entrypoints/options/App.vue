@@ -22,6 +22,8 @@ const animateCards = field("animateCards");
 const approvalGuard = field("approvalGuard");
 const resetChecksOnNewCommits = field("resetChecksOnNewCommits");
 const hunkReview = field("hunkReview");
+const hunkCollapseViewed = field("hunkCollapseViewed");
+const hunkHotkeys = field("hunkHotkeys");
 
 const approvalsInvalid = ref(false);
 function setApprovalsNeeded(event: Event) {
@@ -136,6 +138,16 @@ async function importFile(event: Event) {
           v-model="hunkReview"
           label="Hunk review"
           help="A Viewed checkbox on every hunk, not only on the whole file."
+        />
+        <GlToggle
+          v-model="hunkCollapseViewed"
+          label="Collapse viewed hunks"
+          help="Hides the lines of a hunk once it is viewed; its header has a button to show them."
+        />
+        <GlToggle
+          v-model="hunkHotkeys"
+          label="Keyboard shortcuts"
+          help="Shift+] and Shift+[ go to the next and previous hunk not viewed yet."
         />
       </section>
 

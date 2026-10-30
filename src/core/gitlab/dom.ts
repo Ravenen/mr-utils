@@ -282,3 +282,22 @@ function splitHunks(
   // A header after the last hunk only expands the rest of the file
   return hunks.filter((h) => h.blocks.length > 0);
 }
+
+// The link of the MR's Changes tab, which holds its file count badge
+export function changesTabLink(doc: Document = document): HTMLElement | null {
+  return doc.querySelector<HTMLElement>("[data-testid='diffs-tab'] a, li.js-diffs-tab a");
+}
+
+// Rows GitLab shows between a hunk's line rows (comments, drafts, comment forms) belong to the hunk too
+export function hunkSpan(hunk: DiffHunk): HTMLElement[] {
+  const first = hunk.rows[0];
+  const last = hunk.rows[hunk.rows.length - 1];
+  if (!first || !last) return [];
+  const span: HTMLElement[] = [];
+  for (let row: Element | null = first; row; row = row.nextElementSibling) {
+    if (row instanceof HTMLElement) span.push(row);
+    if (row === last) return span;
+  }
+  // The rows are in different parents (Rapid Diffs: one <tbody> per hunk, expanded lines may join them)
+  return hunk.rows;
+}

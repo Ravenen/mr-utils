@@ -37,6 +37,8 @@ describe("migrateSettings", () => {
       approvalGuard: true,
       resetChecksOnNewCommits: false,
       hunkReview: true,
+      hunkCollapseViewed: true,
+      hunkHotkeys: true,
     });
   });
 

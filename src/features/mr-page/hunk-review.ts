@@ -1,9 +1,11 @@
 import {
+  changesTabLink,
   diffFileRoot,
   diffFileRootsIn,
   diffFiles,
   diffTreeRows,
   isDiffFileViewedCheckbox,
+  hunkSpan,
   readDiffFile,
   type DiffFile,
   type DiffHunk,
@@ -19,6 +21,7 @@ import {
 } from "@/core/storage/hunk-marks";
 import { badge } from "@/ui/badge";
 import { checkbox } from "@/ui/checkbox";
+import { prependIcon } from "@/ui/icons";
 import { blockIds } from "@/utils/hunks";
 import { loadMrPageData, type MrPageRoute } from "./seen-state";
 
@@ -26,6 +29,8 @@ const CONTROL = "mrflow-hunk-control";
 const HEADER = "mrflow-hunk-header";
 const FILE_PROGRESS = "mrflow-hunk-progress";
 const TREE_PROGRESS = "mrflow-hunk-tree-progress";
+const LEFT = "mrflow-hunks-left";
+const TOGGLE = "mrflow-hunk-toggle";
 const PRUNED = "hunk-review/pruned";
 
 interface Progress {
@@ -39,10 +44,13 @@ interface Progress {
 // its hunks are viewed, GitLab's own Viewed checkbox of the file is ticked, and unticking it clears
 // the file's hunks. GitLab mounts and drops diff files as they load and scroll, so the page is watched
 // and only the files a change touched are read again.
+// Viewed hunks are collapsed (their header stays, with a button to show the lines), the Changes tab
+// counts the hunks left, and Shift+] / Shift+[ go to the next / previous hunk not viewed (GitLab
+// already uses ] and [ for files).
 export const hunkReviewFeature: Feature<MrPageRoute> = {
   name: "hunk-review",
   match: (route): route is MrPageRoute => route.kind === "mr-page",
-  settings: ["hunkReview"],
+  settings: ["hunkReview", "hunkCollapseViewed", "hunkHotkeys"],
   async mount(ctx) {
     if (!ctx.settings.hunkReview) return;
     const key = hunkMarksKey(ctx.route.projectPath, ctx.route.iid);
@@ -67,6 +75,9 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
     // Files whose Viewed checkbox was unticked while collapsed: their hunks are cleared once shown
     const pendingUnmark = new Set<string>();
     let syncing = false;
+    // Viewed hunks the user opened again, by their first block id
+    const expanded = new Set<string>();
+    const collapse = ctx.settings.hunkCollapseViewed;
 
     const isMarked = (id: string) => id in marks;
     const save = () => {
@@ -101,13 +112,28 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
           control = document.createElement(host.tagName === "TR" ? "td" : "div");
           control.className = CONTROL;
           const owner = control;
+          const rerender = () => {
+            const root = diffFileRoot(owner);
+            if (root) renderFile(readDiffFile(root));
+            renderSummary();
+          };
+          if (collapse) {
+            control.appendChild(
+              toggleButton(() => {
+                const first = controlIds.get(owner)?.[0] ?? "";
+                if (!expanded.delete(first)) expanded.add(first);
+                rerender();
+              }),
+            );
+          }
           control.appendChild(
             checkbox("Viewed", {
               onChange: (checked) => {
-                setMarks(controlIds.get(owner) ?? [], checked);
-                const root = diffFileRoot(owner);
-                if (root) renderFile(readDiffFile(root));
-                renderTree();
+                const ids = controlIds.get(owner) ?? [];
+                setMarks(ids, checked);
+                // Ticked again later: collapsed again
+                if (!checked) expanded.delete(ids[0] ?? "");
+                rerender();
               },
             }).root,
           );
@@ -117,10 +143,25 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         controlIds.set(control, ids);
         const input = control.querySelector("input");
         if (input) input.checked = viewed;
-        hunk.rows.forEach((row) => {
-          if (row.hasAttribute("data-mrflow-hunk-viewed") !== viewed)
-            row.toggleAttribute("data-mrflow-hunk-viewed", viewed);
-        });
+        hunk.rows.forEach((row) => setFlag(row, "data-mrflow-hunk-viewed", viewed));
+
+        const collapsed = collapse && viewed && !expanded.has(ids[0] ?? "");
+        hunkSpan(hunk).forEach((row) => setFlag(row, "data-mrflow-hunk-collapsed", collapsed));
+        const toggle = control.querySelector<HTMLButtonElement>(`.${TOGGLE}`);
+        if (toggle) {
+          toggle.hidden = !viewed;
+          toggle.setAttribute("aria-expanded", String(!collapsed));
+          toggle.setAttribute("aria-label", collapsed ? "Show lines" : "Hide lines");
+          toggle.title = collapsed ? "Show lines" : "Hide lines";
+          const count = toggle.querySelector(".gl-button-text");
+          const text = collapsed ? `${hunk.rows.length} lines` : "";
+          if (count && count.textContent !== text) count.textContent = text;
+          toggle.classList.toggle("btn-icon", !collapsed);
+          const use = toggle.querySelector("use");
+          const icon = collapsed ? "chevron-right" : "chevron-down";
+          if (use && !use.getAttribute("href")?.endsWith(`#${icon}`))
+            use.setAttribute("href", use.getAttribute("href")?.replace(/#.*$/, `#${icon}`) ?? "");
+        }
       });
 
       // A collapsed file shows no lines: keep what it showed last
@@ -135,7 +176,7 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       }
     };
 
-    const renderTree = () => {
+    const renderSummary = () => {
       for (const { row, fileId } of diffTreeRows()) {
         const shown = progress.get(fileId);
         let el = row.querySelector<HTMLElement>(`:scope > .${TREE_PROGRESS}`);
@@ -154,11 +195,12 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         el.title = `${shown.viewed} of ${shown.total} hunks viewed`;
         el.toggleAttribute("data-mrflow-done", shown.viewed === shown.total);
       }
+      renderHunksLeft(progress, added);
     };
 
     const renderAll = () => {
       diffFiles().forEach(renderFile);
-      renderTree();
+      renderSummary();
     };
 
     // GitLab's Viewed checkbox of a file, ticked or unticked by the user
@@ -177,10 +219,35 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
           if (ids.length === 0) pendingUnmark.add(file.id);
         }
         renderFile(file);
-        renderTree();
+        renderSummary();
       },
       { signal: ctx.signal },
     );
+
+    if (ctx.settings.hunkHotkeys) {
+      document.addEventListener(
+        "keydown",
+        (event) => {
+          if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
+          // By key position, so that it works on any keyboard layout
+          const step = event.code === "BracketRight" ? 1 : event.code === "BracketLeft" ? -1 : 0;
+          if (step === 0) return;
+          const target = nextUnviewedHunk(step);
+          if (!target) return;
+          event.preventDefault();
+          const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+          target.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
+          target.animate(
+            [
+              { boxShadow: "inset 0 0 0 2px var(--gl-focus-ring-outer-color, #1f75cb)" },
+              { boxShadow: "inset 0 0 0 2px transparent" },
+            ],
+            { duration: 1200, easing: "ease-out" },
+          );
+        },
+        { signal: ctx.signal },
+      );
+    }
 
     watchHunkMarks(
       key,
@@ -205,7 +272,7 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         const roots = [...dirty].filter((root) => root.isConnected);
         dirty.clear();
         roots.forEach((root) => renderFile(readDiffFile(root)));
-        renderTree();
+        renderSummary();
       });
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -215,11 +282,73 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       observer.disconnect();
       cancelAnimationFrame(scheduled);
       added.forEach((el) => el.remove());
-      for (const attr of ["data-mrflow-hunk-header", "data-mrflow-hunk-viewed"])
+      for (const attr of ["data-mrflow-hunk-header", "data-mrflow-hunk-viewed", "data-mrflow-hunk-collapsed"])
         document.querySelectorAll(`[${attr}]`).forEach((el) => el.removeAttribute(attr));
     });
   },
 };
+
+function setFlag(element: Element, name: string, on: boolean) {
+  if (element.hasAttribute(name) !== on) element.toggleAttribute(name, on);
+}
+
+function isTyping(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  );
+}
+
+// The header of the next (step 1) or previous (-1) hunk not viewed, from the middle of the window,
+// where the last one gone to was put
+function nextUnviewedHunk(step: 1 | -1): HTMLElement | null {
+  const middle = window.innerHeight / 2;
+  const headers = [...document.querySelectorAll<HTMLElement>(`.${CONTROL}`)]
+    .filter((control) => !control.querySelector<HTMLInputElement>("input[type=checkbox]")?.checked)
+    .map((control) => control.parentElement)
+    .filter((header): header is HTMLElement => header !== null);
+  const top = (header: HTMLElement) => header.getBoundingClientRect().top;
+  return step === 1
+    ? (headers.find((header) => top(header) > middle + 1) ?? null)
+    : (headers.reverse().find((header) => top(header) < middle - 1) ?? null);
+}
+
+// Pajamas tertiary button that shows or hides a viewed hunk's lines
+function toggleButton(onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `${TOGGLE} gl-button btn btn-icon btn-sm btn-default btn-default-tertiary gl-mr-2`;
+  button.hidden = true;
+  // How many lines it hides, while collapsed
+  const count = document.createElement("span");
+  count.className = "gl-button-text";
+  button.appendChild(count);
+  prependIcon(button, "chevron-down");
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+// "N left" next to the Changes tab's file count: hunks not viewed in the files shown so far
+function renderHunksLeft(progress: Map<string, Progress>, added: Set<Element>) {
+  const link = changesTabLink();
+  let el = link?.querySelector<HTMLElement>(`.${LEFT}`) ?? null;
+  if (!link || progress.size === 0) {
+    el?.remove();
+    return;
+  }
+  const left = [...progress.values()].reduce((sum, { viewed, total }) => sum + total - viewed, 0);
+  if (!el) {
+    el = badge("", "", "neutral");
+    el.classList.add(LEFT, "gl-ml-1");
+    link.appendChild(el);
+    added.add(el);
+  }
+  const text = left === 0 ? "all viewed" : `${left} left`;
+  if (el.textContent !== text) el.textContent = text;
+  el.title = left === 0 ? "Every hunk viewed" : `${left} hunks not viewed yet`;
+  el.classList.toggle("badge-success", left === 0);
+  el.classList.toggle("badge-neutral", left > 0);
+}
 
 // Block ids of each hunk of a file
 function idsOf(file: DiffFile, path = file.path): string[][] {
