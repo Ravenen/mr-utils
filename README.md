@@ -20,6 +20,8 @@ Browser extension that makes GitLab merge requests easier to review. Works on gi
 
 **Changes tab**
 - A **Viewed** checkbox on every hunk, not only on the whole file. Works with both GitLab diff renderers (Rapid Diffs and the older one), inline and side by side.
+- Marks belong to the changed lines, not to line numbers: after a new push, hunks it did not change stay viewed and changed ones are cleared.
+- Progress per file ("2/3 hunks") in the file header and the file tree. When every hunk of a file is viewed, GitLab's own **Viewed** checkbox of the file is ticked; unticking it clears the file's hunks.
 
 ## Install
 

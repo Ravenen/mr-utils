@@ -42,6 +42,8 @@ export interface MrData extends Activity {
   approvalsRequired: number;
   hasUserApproved: boolean;
   mrPath: string;
+  // GitLab's MR state: "opened", "closed", "merged" or "locked"
+  state?: string;
   isDraft?: boolean;
   isReady: boolean;
   hasConflicts: boolean;
@@ -125,6 +127,7 @@ export function processMRData(ctx: LoadContext, mr: MrNode, activity: Activity |
     approvalsRequired,
     hasUserApproved: approvedByIds.includes(ctx.userId),
     mrPath: mr.webUrl ? new URL(mr.webUrl).pathname : "",
+    state: mr.state,
     isDraft: mr.draft,
     isReady: status === "MERGEABLE" && approvalsGiven >= approvalsRequired,
     hasConflicts: mr.conflicts === true || status === "CONFLICT",

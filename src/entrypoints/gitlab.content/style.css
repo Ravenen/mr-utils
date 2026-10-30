@@ -229,3 +229,12 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   font-size: 0.75rem;
   line-height: 1rem;
 }
+
+/* "2/3" on a file in the file tree; success color once every hunk is viewed */
+.mrflow-hunk-tree-progress {
+  color: var(--gl-text-color-subtle);
+}
+
+.mrflow-hunk-tree-progress[data-mrflow-done] {
+  color: var(--gl-text-color-success);
+}

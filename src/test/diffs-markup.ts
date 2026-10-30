@@ -27,7 +27,8 @@ export interface DiffsOptions {
 }
 
 const escape = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const hashOf = (path: string) =>
+// GitLab's file hash stand-in: the diff file's id and its file tree row's data-file-row
+export const hashOf = (path: string) =>
   [...path]
     .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7)
     .toString(16)
@@ -199,6 +200,20 @@ export function diffFilesMarkup(
     ? `<article class="rd-app" data-rapid-diffs><div class="rd-app-body"><section class="rd-app-content">
         <div class="rd-app-diffs-list"><div data-diffs-list>${markup}</div></div></section></div></article>`
     : `<div class="tab-pane diffs" id="diffs"><div class="diff-files-holder"><div class="files">${markup}</div></div></div>`;
+}
+
+// The file tree (file_row.vue): one row per file, linked to its diff file by hash
+export function diffTreeMarkup(files: DiffFileSpec[]): string {
+  const rows = files
+    .map(
+      (file) => `<div data-testid="file-row-container" class="gl-flex gl-items-center">
+        <button type="button" class="file-row gl-flex-grow-1" data-file-row="${hashOf(file.path)}" data-testid="file-row" aria-label="${escape(file.path)}">
+          <span class="file-row-name gl-min-w-0" data-testid="file-row-name-container">${escape(file.path.split("/").pop() ?? "")}</span>
+        </button>
+      </div>`,
+    )
+    .join("");
+  return `<nav class="diff-tree-list" aria-label="File browser">${rows}</nav>`;
 }
 
 // A small MR: one file with a hunk at the top (no header) and one further down, and one more file

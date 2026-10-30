@@ -8,6 +8,7 @@ export const MERGE_REQUESTS_QUERY = `
         nodes {
           iid
           webUrl
+          state
           draft
           updatedAt
           detailedMergeStatus
@@ -54,6 +55,8 @@ export const MERGE_REQUEST_NOTES_PAGE_QUERY = `
 export interface MrNode {
   iid: string;
   webUrl?: string;
+  // "opened", "closed", "merged" or "locked"
+  state?: string;
   draft?: boolean;
   updatedAt?: string;
   detailedMergeStatus?: string;

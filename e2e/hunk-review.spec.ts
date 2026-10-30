@@ -33,3 +33,44 @@ test("hunk review can be turned off", async ({ page, setStorage, gitlab }) => {
   await page.waitForTimeout(300);
   await expect(page.locator(".mrflow-hunk-control")).toHaveCount(0);
 });
+
+for (const renderer of ["vue", "rapid"] as const) {
+  test(`marks are kept for the blocks a new push did not change (${renderer})`, async ({ page, gitlab }) => {
+    gitlab.diffsOptions = { renderer };
+    await page.goto(CHANGES);
+    const checks = page.locator(".mrflow-hunk-control input[type=checkbox]");
+    const labels = page.locator(".mrflow-hunk-control label");
+    await expect(checks).toHaveCount(3);
+    await labels.nth(0).click();
+    await expect(page.locator(".mrflow-hunk-progress").first()).toHaveText("1/2 hunks");
+    await expect(page.locator(".mrflow-hunk-tree-progress").first()).toHaveText("1/2");
+    await labels.nth(1).click();
+    // Every hunk of the file viewed: GitLab's own checkbox follows
+    await expect(page.locator(".mrflow-hunk-progress").first()).toHaveText("2/2 hunks");
+    await expect(page.getByLabel("Viewed", { exact: true }).nth(0)).toBeChecked();
+
+    await page.reload();
+    await expect(checks).toHaveCount(3);
+    await expect(checks.nth(0)).toBeChecked();
+    await expect(checks.nth(1)).toBeChecked();
+
+    // A new push changes a line of the second hunk only
+    gitlab.diffs = SAMPLE_DIFF.map((file, i) =>
+      i === 0
+        ? {
+            ...file,
+            hunks: file.hunks.map((hunk, j) =>
+              j === 1
+                ? { ...hunk, lines: hunk.lines.map((line) => line.replace("{ animate }", "{ animate: true }")) }
+                : hunk,
+            ),
+          }
+        : file,
+    );
+    await page.reload();
+    await expect(checks).toHaveCount(3);
+    await expect(checks.nth(0)).toBeChecked();
+    await expect(checks.nth(1)).not.toBeChecked();
+    await expect(page.locator(".mrflow-hunk-progress").first()).toHaveText("1/2 hunks");
+  });
+}
