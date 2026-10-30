@@ -301,7 +301,7 @@ interface ChecklistItem {
 - [x] `dom.ts`, нативні UI-компоненти — #5
 - [x] Kanban через CSS Grid над нативним списком — #6
 - [x] Схема налаштувань + міграція, options page — #8
-- [ ] Release workflow + публікація в CWS і AMO — #9
+- [x] Release workflow + публікація в CWS і AMO — #9
 - [x] E2E-тести на фікстурах — #10
 
 ### Milestone 2.1: hunk review — епік #12

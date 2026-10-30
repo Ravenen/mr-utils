@@ -20,6 +20,8 @@ Built with WXT (Vite) + TypeScript, pnpm. Source in `src/`, output in `.output/`
 - `public/`: icons, copied as is. The manifest is generated from `wxt.config.ts` and `package.json` (version).
 - `scripts/verify-sources.sh`: rebuilds the Firefox build from the AMO sources zip and diffs it.
 - `.github/workflows/build.yml`: CI; lint, typecheck, unit and e2e tests, both builds, sources check; uploads the builds and the AMO sources zip on every PR.
+- `.github/workflows/release.yml` + `release-please-config.json`: release PR, tag, GitHub release, Chrome Web Store and AMO submission (`docs/releasing.md`).
+- `PRIVACY.md`: privacy policy for the stores.
 - `docs/ROADMAP.md`: audit and plan (2.0 = rewrite to WXT + TypeScript, in progress).
 
 ## Commands
@@ -44,4 +46,4 @@ pnpm exec web-ext lint --source-dir .output/firefox-mv3
 - **Settings are versioned** (`SETTINGS_VERSION`): a new field gets a default in `normalizeSettings`; a changed meaning bumps the version and adds a step to `migrateSettings`, with a test.
 - Per-MR state lives in `localStorage["<canonical MR path>/mr-utils"]` (`getCanonicalMrPath`). The extension is published, so keep stored data backward compatible or migrate it.
 - **AMO needs the source code** because the output is bundled: every Firefox release uploads `mrflow-<version>-sources.zip` next to the add-on. Keep the build reproducible from that zip (no absolute paths or timestamps in the output, pnpm pinned via `packageManager`, `pnpm-lock.yaml` committed), keep the output unminified, and keep README "Building from source" accurate. CI checks it with `scripts/verify-sources.sh`.
-- Bump `version` in `package.json` for every release. Commits follow Conventional Commits.
+- **Releases are automated** (`docs/releasing.md`): release-please bumps `version` in `package.json` and writes `CHANGELOG.md` from Conventional Commits, so never bump the version by hand. Commit types matter: `feat` → minor, `fix`/`perf` → patch, `!` or `BREAKING CHANGE:` → major.
