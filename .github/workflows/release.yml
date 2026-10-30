@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to build and submit again, e.g. v2.0.0
+        description: Release tag to build and submit again (e.g. v2.0.0), or main to check the store credentials before the first release
         required: true
       dry_run:
         description: Only check the store credentials, upload nothing
@@ -77,9 +77,13 @@ jobs:
         if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release upload "$TAG" --clobber
-          ${{ steps.package.outputs.chrome }} ${{ steps.package.outputs.firefox }} ${{ steps.package.outputs.sources }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber \
+              ${{ steps.package.outputs.chrome }} ${{ steps.package.outputs.firefox }} ${{ steps.package.outputs.sources }}
+          else
+            echo "::warning::No GitHub release named $TAG: zips not attached"
+          fi
 
       - name: Submit to the Chrome Web Store and AMO
         env:
@@ -92,6 +96,9 @@ jobs:
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
         run: |
+          # The key may be pasted as the JSON value, with literal \n: make them real line breaks
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY="$(printf '%b' "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY")"
+          export CHROME_SERVICE_ACCOUNT_PRIVATE_KEY
           args=()
           if [ -n "$CHROME_EXTENSION_ID" ] && [ -n "$CHROME_PUBLISHER_ID" ] && [ -n "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY" ]; then
             args+=(--chrome-zip "${{ steps.package.outputs.chrome }}")
