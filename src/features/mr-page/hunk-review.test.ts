@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browser } from "wxt/browser";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import { diffFiles } from "@/core/gitlab/dom";
@@ -257,5 +257,130 @@ describe("hunk review", () => {
       await settle();
       expect(document.body.innerHTML).toBe(before);
     }
+  });
+
+  describe("collapsing viewed hunks", () => {
+    const collapsed = (hunk: number) =>
+      diffFiles()[0]?.hunks[hunk]?.rows.every((row) => row.hasAttribute("data-mrflow-hunk-collapsed"));
+    const toggle = (index: number) => document.querySelectorAll<HTMLButtonElement>(".mrflow-hunk-toggle")[index];
+
+    it("hides a viewed hunk's lines and comments, with a button in its header to show them", async () => {
+      render();
+      // A comment thread under a line of the second hunk
+      const row = diffFiles()[0]?.hunks[1]?.rows[1] as HTMLElement;
+      row.insertAdjacentHTML("afterend", `<div class="diff-tr notes_holder" id="thread">A comment</div>`);
+      await mount();
+      expect(toggle(1)?.hidden).toBe(true);
+      controls()[1]?.click();
+      expect(collapsed(1)).toBe(true);
+      expect(collapsed(0)).toBe(false);
+      expect(document.getElementById("thread")?.hasAttribute("data-mrflow-hunk-collapsed")).toBe(true);
+      // The header stays, and so does the hunk's checkbox
+      expect(diffFiles()[0]?.hunks[1]?.header?.hasAttribute("data-mrflow-hunk-collapsed")).toBe(false);
+      expect(toggle(1)?.hidden).toBe(false);
+      expect(toggle(1)?.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle(1)?.textContent).toBe("6 lines");
+
+      toggle(1)?.click();
+      expect(collapsed(1)).toBe(false);
+      expect(toggle(1)?.getAttribute("aria-expanded")).toBe("true");
+      expect(toggle(1)?.textContent).toBe("");
+      toggle(1)?.click();
+      expect(collapsed(1)).toBe(true);
+
+      controls()[1]?.click();
+      expect(collapsed(1)).toBe(false);
+      expect(toggle(1)?.hidden).toBe(true);
+    });
+
+    it("collapses hunks viewed earlier when the page opens", async () => {
+      render(SAMPLE_DIFF, { renderer: "rapid", view: "parallel" });
+      await mount();
+      controls()[0]?.click();
+      mounted.splice(0).forEach((unmount) => unmount());
+      render(SAMPLE_DIFF, { renderer: "rapid", view: "parallel" });
+      await mount();
+      expect(collapsed(0)).toBe(true);
+    });
+
+    it("can be turned off", async () => {
+      render();
+      await mount({ hunkCollapseViewed: false });
+      controls()[1]?.click();
+      expect(collapsed(1)).toBe(false);
+      expect(toggle(0)).toBeUndefined();
+    });
+  });
+
+  it("counts the hunks left on the Changes tab", async () => {
+    render();
+    document.body.insertAdjacentHTML(
+      "afterbegin",
+      `<ul><li class="diffs-tab js-diffs-tab" data-testid="diffs-tab"><a data-action="diffs">Changes <span class="gl-badge badge badge-pill badge-neutral">2</span></a></li></ul>`,
+    );
+    await mount();
+    const left = () => document.querySelector(".mrflow-hunks-left");
+    expect(left()?.textContent).toBe("3 left");
+    controls()[0]?.click();
+    expect(left()?.textContent).toBe("2 left");
+    controls()[1]?.click();
+    controls()[2]?.click();
+    expect(left()?.textContent).toBe("all viewed");
+    expect(left()?.classList.contains("badge-success")).toBe(true);
+  });
+
+  describe("keyboard shortcuts", () => {
+    const scrolled: Element[] = [];
+    beforeEach(() => {
+      scrolled.length = 0;
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this);
+      };
+      Element.prototype.animate = vi.fn() as unknown as Element["animate"];
+      window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
+    });
+
+    // Lays the hunk headers out 300px apart, the first one at `from`, in a 600px window
+    function layout(from: number) {
+      vi.spyOn(window, "innerHeight", "get").mockReturnValue(600);
+      document.querySelectorAll(".mrflow-hunk-control").forEach((control, i) => {
+        (control.parentElement as HTMLElement).getBoundingClientRect = () => ({ top: from + i * 300 }) as DOMRect;
+      });
+    }
+    const press = (code: string, init: KeyboardEventInit = { shiftKey: true }, target: EventTarget = document.body) =>
+      target.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true, ...init }));
+    const headers = () => [...document.querySelectorAll(".mrflow-hunk-control")].map((c) => c.parentElement);
+
+    it("Shift+] and Shift+[ go to the next and previous hunk not viewed", async () => {
+      render();
+      await mount();
+      controls()[1]?.click();
+      // Headers at 100, 400, 700: the window's middle is 300
+      layout(100);
+      press("BracketRight");
+      // The second hunk is viewed: on to the third
+      expect(scrolled).toEqual([headers()[2]]);
+      press("BracketLeft");
+      expect(scrolled.at(-1)).toBe(headers()[0]);
+    });
+
+    it("leaves ] and [ to GitLab, and typing alone", async () => {
+      render();
+      document.body.insertAdjacentHTML("beforeend", `<textarea id="note"></textarea>`);
+      await mount();
+      layout(100);
+      press("BracketRight", {});
+      press("BracketRight", { shiftKey: true, ctrlKey: true });
+      press("BracketRight", { shiftKey: true }, document.getElementById("note") as HTMLElement);
+      expect(scrolled).toEqual([]);
+    });
+
+    it("can be turned off", async () => {
+      render();
+      await mount({ hunkHotkeys: false });
+      layout(100);
+      press("BracketRight");
+      expect(scrolled).toEqual([]);
+    });
   });
 });

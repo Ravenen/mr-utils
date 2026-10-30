@@ -238,3 +238,25 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
 .mrflow-hunk-tree-progress[data-mrflow-done] {
   color: var(--gl-text-color-success);
 }
+
+/* A viewed hunk's lines (and the comments between them), hidden until shown again from its header */
+[data-mrflow-hunk-collapsed] {
+  display: none !important;
+}
+
+.mrflow-hunk-toggle[hidden] {
+  display: none !important;
+}
+
+/* Compact, to fit the hunk header row */
+.mrflow-hunk-control > .mrflow-hunk-toggle.btn.gl-button {
+  min-height: 0;
+  padding: 0 var(--gl-spacing-scale-2, 0.25rem) !important;
+  gap: var(--gl-spacing-scale-2, 0.25rem);
+  color: var(--gl-text-color-subtle);
+}
+
+.mrflow-hunk-control > .mrflow-hunk-toggle .gl-button-text {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}

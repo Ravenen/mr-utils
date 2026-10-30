@@ -15,6 +15,8 @@ const SETTINGS: Settings = {
   approvalGuard: true,
   resetChecksOnNewCommits: true,
   hunkReview: true,
+  hunkCollapseViewed: true,
+  hunkHotkeys: true,
 };
 
 // Navigation is driven by hand instead of by DOM mutations
