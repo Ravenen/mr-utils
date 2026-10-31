@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.0](https://github.com/Ravenen/mr-utils/compare/v2.0.0...v2.1.0) (2026-10-31)
+
+
+### Features
+
+* collapse viewed hunks, hunks-left counter, Shift+] / Shift+[ navigation ([bc4543f](https://github.com/Ravenen/mr-utils/commit/bc4543f3a41318fc8315cacf11d7d9ef5f472bef))
+* hunk marks kept per block across pushes, file progress, sync with Viewed ([08dd2c2](https://github.com/Ravenen/mr-utils/commit/08dd2c2d4207d57e48a9734d79cb59c906d19dc7))
+* Viewed checkbox and collapsing for each block of changed lines in a hunk ([b895dfb](https://github.com/Ravenen/mr-utils/commit/b895dfb6ceba5c8587f2932ba9361bde0e42c3b0))
+* Viewed checkbox on every hunk of the Changes tab (prototype) ([ddff2c5](https://github.com/Ravenen/mr-utils/commit/ddff2c5cc2d51fdf7e39b674c45b4d74ae876578))
+
 ## [2.0.0](https://github.com/Ravenen/mr-utils/compare/7fa8b09...v2.0.0) (2026-10-31)
 
 
