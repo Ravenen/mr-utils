@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to build and submit again, e.g. v2.0.0
+        description: Release tag to build and submit again (e.g. v2.0.0), or main to check the store credentials before the first release
         required: true
       dry_run:
         description: Only check the store credentials, upload nothing
@@ -31,7 +31,7 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
@@ -45,13 +45,13 @@ jobs:
       TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -77,9 +77,13 @@ jobs:
         if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release upload "$TAG" --clobber
-          ${{ steps.package.outputs.chrome }} ${{ steps.package.outputs.firefox }} ${{ steps.package.outputs.sources }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber \
+              ${{ steps.package.outputs.chrome }} ${{ steps.package.outputs.firefox }} ${{ steps.package.outputs.sources }}
+          else
+            echo "::warning::No GitHub release named $TAG: zips not attached"
+          fi
 
       - name: Submit to the Chrome Web Store and AMO
         env:
@@ -88,17 +92,22 @@ jobs:
           CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}
           CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
           CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
-          FIREFOX_EXTENSION_ID: "{d16c5235-1761-48f3-9fb3-85e3a592e362}"
+          # The add-on's AMO slug or numeric ID, not its {uuid} GUID: publish-browser-extension strips the
+          # braces, and AMO then looks the rest up as a slug and answers 404
+          FIREFOX_EXTENSION_ID: ${{ vars.FIREFOX_EXTENSION_ID }}
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
         run: |
+          # The key may be pasted as the JSON value, with literal \n: make them real line breaks
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY="$(printf '%b' "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY")"
+          export CHROME_SERVICE_ACCOUNT_PRIVATE_KEY
           args=()
           if [ -n "$CHROME_EXTENSION_ID" ] && [ -n "$CHROME_PUBLISHER_ID" ] && [ -n "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY" ]; then
             args+=(--chrome-zip "${{ steps.package.outputs.chrome }}")
           else
             echo "::warning::Chrome Web Store credentials are not set (docs/releasing.md): not submitted"
           fi
-          if [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
+          if [ -n "$FIREFOX_EXTENSION_ID" ] && [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
             # The code is bundled, so AMO gets the sources zip its reviewers rebuild from
             args+=(--firefox-zip "${{ steps.package.outputs.firefox }}" --firefox-sources-zip "${{ steps.package.outputs.sources }}")
           else
