@@ -119,6 +119,7 @@ export const SETTINGS: Settings = {
   approvalGuard: true,
   resetChecksOnNewCommits: true,
   hunkReview: true,
+  hunkBlockReview: true,
   hunkCollapseViewed: true,
   hunkHotkeys: true,
 };

@@ -15,8 +15,8 @@ for (const renderer of ["vue", "rapid"] as const) {
       await page.goto(CHANGES);
       const checks = page.locator(".mrflow-hunk-control input[type=checkbox]");
       await expect(checks).toHaveCount(3);
-      // GitLab's own file checkboxes are untouched
-      await expect(page.getByLabel("Viewed", { exact: true })).toHaveCount(5);
+      // GitLab's own file checkboxes are untouched; the second hunk's two blocks get one each
+      await expect(page.getByLabel("Viewed", { exact: true })).toHaveCount(7);
 
       await page.locator(".mrflow-hunk-control label").nth(1).click();
       await expect(checks.nth(1)).toBeChecked();
@@ -113,3 +113,35 @@ test("viewed hunks collapse, the Changes tab counts the rest, and Shift+] goes t
     })
     .toBe(true);
 });
+
+for (const renderer of ["vue", "rapid"] as const) {
+  test(`a block of a large hunk is viewed and collapsed on its own (${renderer})`, async ({ page, gitlab }) => {
+    gitlab.diffsOptions = { renderer, view: "inline" };
+    await page.goto(CHANGES);
+    // The second hunk of src/board.ts has two blocks
+    const blocks = page.locator(".mrflow-block-control input");
+    await expect(blocks).toHaveCount(2);
+    const firstLine = page.locator("[data-mrflow-block-start]").first();
+    await expect(firstLine).toBeVisible();
+
+    // The box is drawn by the label's ::before, which Playwright does not count as visible
+    await blocks.first().check({ force: true });
+    await expect(firstLine).toBeHidden();
+    const row = page.locator(".mrflow-block-placeholder");
+    await expect(row).toBeVisible();
+    await expect(row.getByRole("button", { name: "Show lines" })).toHaveText("3 lines");
+    // The hunk is half viewed
+    await expect(page.locator(".mrflow-hunk-control input").nth(1)).not.toBeChecked();
+    expect(
+      await page
+        .locator(".mrflow-hunk-control input")
+        .nth(1)
+        .evaluate((el) => (el as HTMLInputElement).indeterminate),
+    ).toBe(true);
+
+    await page.reload();
+    await expect(page.locator(".mrflow-block-placeholder")).toBeVisible();
+    await page.getByRole("button", { name: "Show lines" }).click();
+    await expect(page.locator("[data-mrflow-block-start]").first()).toBeVisible();
+  });
+}
