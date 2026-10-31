@@ -248,15 +248,19 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   display: none !important;
 }
 
-/* Compact, to fit the hunk header row */
-.mrflow-hunk-control > .mrflow-hunk-toggle.btn.gl-button {
+/* Compact, to fit the hunk header row (and a block's line or row) */
+.mrflow-hunk-control > .mrflow-hunk-toggle.btn.gl-button,
+.mrflow-block-control > .mrflow-hunk-toggle.btn.gl-button,
+.mrflow-block-placeholder-control > .mrflow-hunk-toggle.btn.gl-button {
   min-height: 0;
   padding: 0 var(--gl-spacing-scale-2, 0.25rem) !important;
   gap: var(--gl-spacing-scale-2, 0.25rem);
   color: var(--gl-text-color-subtle);
 }
 
-.mrflow-hunk-control > .mrflow-hunk-toggle .gl-button-text {
+.mrflow-hunk-control > .mrflow-hunk-toggle .gl-button-text,
+.mrflow-block-control > .mrflow-hunk-toggle .gl-button-text,
+.mrflow-block-placeholder-control > .mrflow-hunk-toggle .gl-button-text {
   font-size: 0.75rem;
   line-height: 1rem;
 }
@@ -280,6 +284,7 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   padding: 0 var(--gl-spacing-scale-5, 1rem);
   border: 0 !important;
   background: none !important;
+  font-family: var(--gl-font-family-regular, var(--default-regular-font, sans-serif));
   opacity: 0.6;
 }
 
@@ -312,27 +317,16 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   );
 }
 
+/* The button and the checkbox at the right end, as in a hunk header */
 .mrflow-block-placeholder-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   min-height: 1.6em;
-  padding: 0 var(--gl-spacing-scale-5, 1rem) 0 var(--gl-spacing-scale-3, 0.5rem);
+  padding: 0 var(--gl-spacing-scale-5, 1rem);
   border: 0 !important;
   background: none !important;
   font-family: var(--gl-font-family-regular, var(--default-regular-font, sans-serif));
-}
-
-.mrflow-block-placeholder-control > .mrflow-hunk-toggle.btn.gl-button {
-  min-height: 0;
-  padding: 0 var(--gl-spacing-scale-2, 0.25rem) !important;
-  gap: var(--gl-spacing-scale-2, 0.25rem);
-  color: var(--gl-text-color-subtle);
-}
-
-.mrflow-block-placeholder-control .gl-button-text {
-  font-size: 0.75rem;
-  line-height: 1rem;
 }
 
 .mrflow-block-placeholder-control .gl-form-checkbox.custom-control {
