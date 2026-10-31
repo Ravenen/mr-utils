@@ -383,4 +383,132 @@ describe("hunk review", () => {
       expect(scrolled).toEqual([]);
     });
   });
+
+  describe("blocks of changed lines", () => {
+    const blockBoxes = () => [...document.querySelectorAll<HTMLInputElement>(".mrflow-block-control input")];
+    const placeholders = () => [...document.querySelectorAll<HTMLElement>(".mrflow-block-placeholder")];
+    const secondHunk = () => diffFiles()[0]?.hunks[1] as ReturnType<typeof diffFiles>[number]["hunks"][number];
+    const blockCollapsed = (block: number) =>
+      secondHunk().blockRows[block]?.every((row) => row.hasAttribute("data-mrflow-block-collapsed"));
+
+    for (const renderer of ["vue", "rapid"] as const) {
+      for (const view of ["inline", "parallel"] as const) {
+        it(`puts a checkbox on the first line of each block of a hunk with several (${renderer}, ${view})`, async () => {
+          render(SAMPLE_DIFF, { renderer, view });
+          await mount();
+          // Only the second hunk of src/board.ts has two blocks
+          expect(blockBoxes()).toHaveLength(2);
+          const hunk = secondHunk();
+          expect(hunk.blockRows[0]?.[0]?.querySelector(".mrflow-block-control")).not.toBeNull();
+          expect(hunk.blockRows[1]?.[0]?.querySelector(".mrflow-block-control")).not.toBeNull();
+          expect(blockBoxes()[0]?.getAttribute("aria-label")).toBe("Viewed");
+        });
+      }
+    }
+
+    it("collapses a viewed block to a row of ours, and half ticks its hunk", async () => {
+      render();
+      await mount();
+      blockBoxes()[0]?.click();
+      expect(blockCollapsed(0)).toBe(true);
+      expect(blockCollapsed(1)).toBe(false);
+      const [row] = placeholders();
+      expect(row?.nextElementSibling).toBe(secondHunk().blockRows[0]?.[0]);
+      expect(row?.querySelector(".gl-button-text")?.textContent).toBe("3 lines");
+      expect(controls()[1]?.indeterminate).toBe(true);
+      expect(controls()[1]?.checked).toBe(false);
+      expect(progress()[0]).toBe("0/2 hunks");
+
+      // The other block too: the hunk is viewed and collapses as a whole
+      blockBoxes()[1]?.click();
+      expect(controls()[1]?.checked).toBe(true);
+      expect(controls()[1]?.indeterminate).toBe(false);
+      expect(placeholders()).toHaveLength(0);
+      expect(secondHunk().rows.every((r) => r.hasAttribute("data-mrflow-hunk-collapsed"))).toBe(true);
+    });
+
+    it("shows a collapsed block again, and unticks it from its row", async () => {
+      render(SAMPLE_DIFF, { renderer: "rapid", view: "parallel" });
+      await mount();
+      blockBoxes()[0]?.click();
+      expect(placeholders()[0]?.tagName).toBe("TR");
+      placeholders()[0]?.querySelector<HTMLButtonElement>(".mrflow-hunk-toggle")?.click();
+      expect(blockCollapsed(0)).toBe(false);
+      expect(placeholders()).toHaveLength(0);
+      expect(blockBoxes()[0]?.checked).toBe(true);
+
+      blockBoxes()[0]?.click();
+      blockBoxes()[0]?.click();
+      expect(blockCollapsed(0)).toBe(true);
+      placeholders()[0]?.querySelector<HTMLInputElement>("input")?.click();
+      expect(blockCollapsed(0)).toBe(false);
+      expect(await stored()).toEqual([]);
+    });
+
+    it("shows the blocks of a viewed hunk whose lines are shown", async () => {
+      render();
+      await mount();
+      controls()[1]?.click();
+      document.querySelectorAll<HTMLButtonElement>(".mrflow-hunk-control .mrflow-hunk-toggle")[1]?.click();
+      expect(blockCollapsed(0)).toBe(false);
+      expect(blockCollapsed(1)).toBe(false);
+      expect(placeholders()).toHaveLength(0);
+      expect(blockBoxes().map((box) => box.checked)).toEqual([true, true]);
+    });
+
+    it("keeps a block's mark after a push that changed the other block of its hunk", async () => {
+      render();
+      await mount();
+      blockBoxes()[1]?.click();
+      mounted.splice(0).forEach((unmount) => unmount());
+      // The push changes a line of the first block only
+      render(
+        SAMPLE_DIFF.map((file, i) =>
+          i === 0
+            ? {
+                ...file,
+                hunks: file.hunks.map((hunk) => ({
+                  ...hunk,
+                  lines: hunk.lines.map((line) => line.replace("{ animate }", "{ animate: true }")),
+                })),
+              }
+            : file,
+        ),
+      );
+      await mount();
+      expect(blockBoxes().map((box) => box.checked)).toEqual([false, true]);
+    });
+
+    it("can be turned off", async () => {
+      render();
+      await mount({ hunkBlockReview: false });
+      expect(blockBoxes()).toHaveLength(0);
+    });
+
+    it("Shift+] goes through a hunk block by block", async () => {
+      render();
+      await mount();
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this);
+      };
+      Element.prototype.animate = vi.fn() as unknown as Element["animate"];
+      window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
+      const scrolled: Element[] = [];
+      vi.spyOn(window, "innerHeight", "get").mockReturnValue(600);
+      // In page order: hunk 1 header, block 1 line, block 2 line, README's hunk header
+      const targets = [
+        controls()[0]?.parentElement,
+        secondHunk().blockRows[0]?.[0],
+        secondHunk().blockRows[1]?.[0],
+        controls()[2]?.parentElement,
+      ] as HTMLElement[];
+      targets.forEach((el, i) => (el.getBoundingClientRect = () => ({ top: 100 + i * 300 }) as DOMRect));
+      blockBoxes()[0]?.click();
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", { code: "BracketRight", shiftKey: true, bubbles: true }),
+      );
+      // Block 1 is viewed: on to block 2
+      expect(scrolled).toEqual([targets[2]]);
+    });
+  });
 });

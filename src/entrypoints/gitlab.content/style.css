@@ -260,3 +260,89 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   font-size: 0.75rem;
   line-height: 1rem;
 }
+
+/* == Blocks of changed lines in a hunk (hunk-review.ts, hunkBlockReview) == */
+
+/* The block's checkbox sits at the right end of its first line */
+[data-mrflow-block-start] {
+  position: relative;
+}
+
+.mrflow-block-control {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  max-height: 1.6em;
+  padding: 0 var(--gl-spacing-scale-5, 1rem);
+  border: 0 !important;
+  background: none !important;
+  opacity: 0.6;
+}
+
+[data-mrflow-block-start]:hover > .mrflow-block-control,
+.mrflow-block-control:focus-within {
+  opacity: 1;
+}
+
+.mrflow-block-control .gl-form-checkbox.custom-control {
+  min-height: 1rem;
+  margin: 0;
+}
+
+.mrflow-block-control .gl-form-checkbox.custom-control .custom-control-input ~ .custom-control-label {
+  margin: 0;
+  padding-left: 0;
+  line-height: 1rem;
+}
+
+[data-mrflow-block-collapsed] {
+  display: none !important;
+}
+
+/* A viewed block, collapsed: a thin row of ours in its place, in the hunk header's colors */
+.mrflow-block-placeholder {
+  display: block;
+  background-color: var(
+    --code-diff-hunk-header-background-color,
+    var(--diff-expansion-background-color, var(--gl-background-color-strong))
+  );
+}
+
+.mrflow-block-placeholder-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.6em;
+  padding: 0 var(--gl-spacing-scale-5, 1rem) 0 var(--gl-spacing-scale-3, 0.5rem);
+  border: 0 !important;
+  background: none !important;
+  font-family: var(--gl-font-family-regular, var(--default-regular-font, sans-serif));
+}
+
+.mrflow-block-placeholder-control > .mrflow-hunk-toggle.btn.gl-button {
+  min-height: 0;
+  padding: 0 var(--gl-spacing-scale-2, 0.25rem) !important;
+  gap: var(--gl-spacing-scale-2, 0.25rem);
+  color: var(--gl-text-color-subtle);
+}
+
+.mrflow-block-placeholder-control .gl-button-text {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.mrflow-block-placeholder-control .gl-form-checkbox.custom-control {
+  min-height: 1rem;
+  margin: 0;
+}
+
+.mrflow-block-placeholder-control .gl-form-checkbox.custom-control .custom-control-input ~ .custom-control-label {
+  margin: 0;
+  color: var(--gl-text-color-subtle);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
