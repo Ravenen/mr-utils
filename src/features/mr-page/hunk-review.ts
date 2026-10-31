@@ -167,20 +167,7 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         );
         hunkSpan(hunk).forEach((row) => setFlag(row, "data-mrflow-hunk-collapsed", collapsed));
         const toggle = control.querySelector<HTMLButtonElement>(`.${TOGGLE}`);
-        if (toggle) {
-          toggle.hidden = !viewed;
-          toggle.setAttribute("aria-expanded", String(!collapsed));
-          toggle.setAttribute("aria-label", collapsed ? "Show lines" : "Hide lines");
-          toggle.title = collapsed ? "Show lines" : "Hide lines";
-          const count = toggle.querySelector(".gl-button-text");
-          const text = collapsed ? `${hunk.rows.length} lines` : "";
-          if (count && count.textContent !== text) count.textContent = text;
-          toggle.classList.toggle("btn-icon", !collapsed);
-          const use = toggle.querySelector("use");
-          const icon = collapsed ? "chevron-right" : "chevron-down";
-          if (use && !use.getAttribute("href")?.endsWith(`#${icon}`))
-            use.setAttribute("href", use.getAttribute("href")?.replace(/#.*$/, `#${icon}`) ?? "");
-        }
+        if (toggle) renderToggle(toggle, viewed, collapsed, hunk.rows.length);
       });
 
       // Rows of ours left before lines that are no longer a collapsed block's
@@ -228,6 +215,15 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         control = document.createElement(first.tagName === "TR" ? "td" : "div");
         control.className = BLOCK_CONTROL;
         const owner = control;
+        // A viewed block shown again: collapsed again from here
+        if (collapse) {
+          control.appendChild(
+            toggleButton(() => {
+              expanded.delete(blockOf.get(owner) ?? "");
+              rerender(owner);
+            }),
+          );
+        }
         const box = checkbox("", { onChange: (checked) => toggleBlock(owner, checked) });
         box.input.setAttribute("aria-label", "Viewed");
         box.input.title = "Viewed";
@@ -238,6 +234,8 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       blockOf.set(control, id);
       const input = control.querySelector("input");
       if (input) input.checked = viewed;
+      const blockToggle = control.querySelector<HTMLButtonElement>(`.${TOGGLE}`);
+      if (blockToggle) renderToggle(blockToggle, viewed, false, rows.length);
 
       let placeholder = first.previousElementSibling;
       if (!placeholder?.classList.contains(BLOCK_PLACEHOLDER)) placeholder = null;
@@ -250,21 +248,11 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         row.className = BLOCK_PLACEHOLDER;
         const cell = document.createElement(first.tagName === "TR" ? "td" : "div");
         cell.className = `${BLOCK_PLACEHOLDER}-control`;
+        // Laid out as a hunk header: the button and the checkbox at the right end
         const toggle = toggleButton(() => {
           expanded.add(blockOf.get(row) ?? "");
           rerender(row);
         });
-        toggle.hidden = false;
-        toggle.classList.remove("btn-icon");
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.setAttribute("aria-label", "Show lines");
-        toggle.title = "Show lines";
-        toggle
-          .querySelector("use")
-          ?.setAttribute(
-            "href",
-            toggle.querySelector("use")?.getAttribute("href")?.replace(/#.*$/, "#chevron-right") ?? "",
-          );
         const box = checkbox("Viewed", { checked: true, onChange: (checked) => toggleBlock(row, checked) });
         cell.append(toggle, box.root);
         row.appendChild(cell);
@@ -273,9 +261,8 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         placeholder = row;
       }
       blockOf.set(placeholder, id);
-      const count = placeholder.querySelector(".gl-button-text");
-      const text = `${rows.length} lines`;
-      if (count && count.textContent !== text) count.textContent = text;
+      const toggle = placeholder.querySelector<HTMLButtonElement>(`.${TOGGLE}`);
+      if (toggle) renderToggle(toggle, true, true, rows.length);
     };
 
     const renderSummary = () => {
@@ -422,11 +409,27 @@ function nextUnviewed(step: 1 | -1): HTMLElement | null {
     : (headers.reverse().find((header) => top(header) < middle - 1) ?? null);
 }
 
-// Pajamas tertiary button that shows or hides a viewed hunk's lines
+// A viewed hunk's or block's button: "> N lines" while collapsed, "v N lines" while shown
+function renderToggle(toggle: HTMLButtonElement, viewed: boolean, collapsed: boolean, lines: number) {
+  toggle.hidden = !viewed;
+  const label = collapsed ? "Show lines" : "Hide lines";
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.setAttribute("aria-label", `${label} (${lines})`);
+  toggle.title = label;
+  const count = toggle.querySelector(".gl-button-text");
+  const text = lines === 1 ? "1 line" : `${lines} lines`;
+  if (count && count.textContent !== text) count.textContent = text;
+  const use = toggle.querySelector("use");
+  const icon = collapsed ? "chevron-right" : "chevron-down";
+  if (use && !use.getAttribute("href")?.endsWith(`#${icon}`))
+    use.setAttribute("href", use.getAttribute("href")?.replace(/#.*$/, `#${icon}`) ?? "");
+}
+
+// Pajamas tertiary button that shows or hides a viewed hunk's or block's lines
 function toggleButton(onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = `${TOGGLE} gl-button btn btn-icon btn-sm btn-default btn-default-tertiary gl-mr-2`;
+  button.className = `${TOGGLE} gl-button btn btn-sm btn-default btn-default-tertiary gl-mr-2`;
   button.hidden = true;
   // How many lines it hides, while collapsed
   const count = document.createElement("span");
@@ -498,8 +501,10 @@ function hunkHost(hunk: DiffHunk, added: Set<Element>): HTMLElement | null {
     if (!hunk.header.hasAttribute("data-mrflow-hunk-header")) hunk.header.setAttribute("data-mrflow-hunk-header", "");
     return hunk.header;
   }
-  const first = hunk.rows[0];
+  let first: Element | undefined = hunk.rows[0];
   if (!first) return null;
+  // A collapsed first block puts its row of ours between this header and the hunk's first line
+  while (first.previousElementSibling?.classList.contains(BLOCK_PLACEHOLDER)) first = first.previousElementSibling;
   const previous = first.previousElementSibling;
   if (previous instanceof HTMLElement && previous.classList.contains(HEADER)) return previous;
   const header = document.createElement(first.tagName === "TR" ? "tr" : "div");

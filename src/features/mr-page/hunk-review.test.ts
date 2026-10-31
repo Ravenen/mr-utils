@@ -284,7 +284,8 @@ describe("hunk review", () => {
       toggle(1)?.click();
       expect(collapsed(1)).toBe(false);
       expect(toggle(1)?.getAttribute("aria-expanded")).toBe("true");
-      expect(toggle(1)?.textContent).toBe("");
+      // The number of lines stays, so it can be collapsed again knowing what it hides
+      expect(toggle(1)?.textContent).toBe("6 lines");
       toggle(1)?.click();
       expect(collapsed(1)).toBe(true);
 
@@ -509,6 +510,85 @@ describe("hunk review", () => {
       );
       // Block 1 is viewed: on to block 2
       expect(scrolled).toEqual([targets[2]]);
+    });
+  });
+
+  describe("blocks of the hunk at the top of a file", () => {
+    // Like example/host/app.cpp: the top hunk (no "@@" row) has three blocks, the first on its first line
+    const TOP: DiffFileSpec[] = [
+      {
+        path: "example/host/app.cpp",
+        hunks: [
+          {
+            lines: [
+              '-#include "state/istate.hpp"',
+              '+#include "factory.hpp"',
+              '+#include "state/astate.hpp"',
+              ' #include "states.hpp"',
+              " ",
+              "+#include <cassert>",
+              " #include <thread>",
+            ],
+          },
+          { header: "@@ -14,18 +16,31 @@ int main()", lines: ["  a", "-  b", "+  c", "  d", "+  e", "  f"] },
+        ],
+      },
+    ];
+    const blockBoxes = () => [...document.querySelectorAll<HTMLInputElement>(".mrflow-block-control input")];
+    const placeholders = () => document.querySelectorAll(".mrflow-block-placeholder");
+
+    for (const renderer of ["vue", "rapid"] as const) {
+      for (const view of ["inline", "parallel"] as const) {
+        it(`collapses its first block without adding header rows (${renderer}, ${view})`, async () => {
+          render(TOP, { renderer, view });
+          await mount();
+          blockBoxes()[0]?.click();
+          await settle();
+          expect(document.querySelectorAll(".mrflow-hunk-header")).toHaveLength(1);
+          expect(placeholders()).toHaveLength(1);
+          // Our header, then the collapsed block's row, then the block's first line
+          const header = document.querySelector(".mrflow-hunk-header");
+          expect(header?.nextElementSibling?.classList.contains("mrflow-block-placeholder")).toBe(true);
+          expect(controls()[0]?.indeterminate).toBe(true);
+        });
+      }
+    }
+
+    it("keeps the marks of its blocks across the inline and side-by-side views", async () => {
+      document.body.innerHTML = `<div id="list">${diffFilesMarkup(TOP, { renderer: "rapid", view: "inline" })}</div>`;
+      await mount();
+      blockBoxes()[0]?.click();
+      blockBoxes()[2]?.click();
+      await settle();
+      // GitLab shows the file again in the other view
+      (document.getElementById("list") as HTMLElement).innerHTML = diffFilesMarkup(TOP, {
+        renderer: "rapid",
+        view: "parallel",
+      });
+      await settle();
+      expect(blockBoxes().map((box) => box.checked)).toEqual([true, false, true, false]);
+      expect(placeholders()).toHaveLength(2);
+      expect(document.querySelectorAll(".mrflow-hunk-header")).toHaveLength(1);
+    });
+
+    it("collapses a viewed block shown again from its own line", async () => {
+      render(TOP);
+      await mount();
+      blockBoxes()[1]?.click();
+      const row = placeholders()[0] as HTMLElement;
+      // The button and the checkbox, as in a hunk header
+      expect(row.querySelector(".mrflow-hunk-toggle")?.textContent).toBe("1 line");
+      row.querySelector<HTMLButtonElement>(".mrflow-hunk-toggle")?.click();
+      expect(placeholders()).toHaveLength(0);
+      const lineToggle = document.querySelectorAll<HTMLButtonElement>(".mrflow-block-control .mrflow-hunk-toggle")[1];
+      expect(lineToggle?.hidden).toBe(false);
+      expect(lineToggle?.getAttribute("aria-expanded")).toBe("true");
+      lineToggle?.click();
+      expect(placeholders()).toHaveLength(1);
+      // Not viewed: no button on the line
+      expect(document.querySelectorAll<HTMLButtonElement>(".mrflow-block-control .mrflow-hunk-toggle")[0]?.hidden).toBe(
+        true,
+      );
     });
   });
 });
