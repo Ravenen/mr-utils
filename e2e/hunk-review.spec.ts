@@ -145,3 +145,38 @@ for (const renderer of ["vue", "rapid"] as const) {
     await expect(page.locator("[data-mrflow-block-start]").first()).toBeVisible();
   });
 }
+
+test("the first block of a file's top hunk collapses once, and its mark survives switching to side by side", async ({
+  page,
+  gitlab,
+}) => {
+  gitlab.diffs = [
+    {
+      path: "example/host/app.cpp",
+      hunks: [
+        {
+          lines: [
+            '-#include "state/istate.hpp"',
+            '+#include "factory.hpp"',
+            '+#include "state/astate.hpp"',
+            ' #include "states.hpp"',
+            "+#include <cassert>",
+            " #include <thread>",
+          ],
+        },
+      ],
+    },
+  ];
+  gitlab.diffsOptions = { renderer: "rapid", view: "inline" };
+  await page.goto(CHANGES);
+  await page.locator(".mrflow-block-control input").first().check({ force: true });
+  await expect(page.locator(".mrflow-block-placeholder")).toHaveCount(1);
+  await page.waitForTimeout(300);
+  await expect(page.locator(".mrflow-hunk-header")).toHaveCount(1);
+
+  gitlab.diffsOptions = { renderer: "rapid", view: "parallel" };
+  await page.reload();
+  await expect(page.locator(".mrflow-block-placeholder")).toHaveCount(1);
+  await expect(page.locator(".mrflow-hunk-header")).toHaveCount(1);
+  await expect(page.locator(".mrflow-block-control input").nth(1)).not.toBeChecked();
+});
