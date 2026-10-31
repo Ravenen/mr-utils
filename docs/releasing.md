@@ -42,8 +42,9 @@
 
 **Один раз (налаштування):**
 1. Дозволити GitHub Actions створювати PR: репозиторій → **Settings** → **Actions** → **General** → **Workflow permissions** → увімкнути **Allow GitHub Actions to create and approve pull requests** → **Save**. Без цього release-please не відкриє release PR.
-2. Додати ключі магазинів (нижче).
-3. Перевірити ключі ще до першого релізу (нижче, «Перевірка без релізу»).
+2. Зливати PR через **rebase** (або squash), а не merge-комітом: **Settings** → **General** → **Pull Requests** → вимкнути **Allow merge commits**, лишити **Allow rebase merging**. Release-please бере в CHANGELOG і коміти, і merge-коміт, у тексті якого стоїть назва PR. Якщо назва PR збігається з повідомленням коміту, кожен запис з'являється двічі.
+3. Додати ключі магазинів (нижче).
+4. Перевірити ключі ще до першого релізу (нижче, «Перевірка без релізу»).
 
 ## Ключі магазинів
 
@@ -57,10 +58,11 @@
 | `CHROME_PUBLISHER_ID` | Variable | ID видавця в Chrome Web Store |
 | `CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL` | Secret | `client_email` з JSON-ключа сервісного акаунта Google |
 | `CHROME_SERVICE_ACCOUNT_PRIVATE_KEY` | Secret | `private_key` з того самого JSON |
+| `FIREFOX_EXTENSION_ID` | Variable | slug аддону на AMO (або його числовий ID) |
 | `FIREFOX_JWT_ISSUER` | Secret | «JWT issuer» з AMO |
 | `FIREFOX_JWT_SECRET` | Secret | «JWT secret» з AMO |
 
-ID аддону для Firefox уже в коді (`wxt.config.ts`, `browser_specific_settings.gecko.id`), окремо його задавати не треба.
+Для `FIREFOX_EXTENSION_ID` потрібен саме **slug** (або числовий ID) аддону на AMO, а не GUID `{d16c5235-…}` з `wxt.config.ts`. `wxt submit` (бібліотека `publish-browser-extension`) прибирає з GUID фігурні дужки, а AMO розпізнає GUID лише з дужками або з `@`, тож шукає решту як slug і відповідає 404 («Not found»).
 
 ### Chrome Web Store
 
@@ -92,7 +94,13 @@ Chrome Web Store API v2 авторизується через **сервісни
 
 ### addons.mozilla.org (Firefox)
 
+**1. `FIREFOX_EXTENSION_ID` (slug аддону)**
 1. Увійти на https://addons.mozilla.org під акаунтом, якому належить MRFlow (власник або розробник аддону).
+2. **Developer Hub** → **My Add-ons** → MRFlow → **Edit Product Page**. Адреса буде `https://addons.mozilla.org/<мова>/developers/addon/<slug>/edit`: частина `<slug>` (наприклад `mrflow`) — це значення змінної.
+3. Той самий slug є в адресі публічної сторінки аддону: `https://addons.mozilla.org/firefox/addon/<slug>/`.
+
+**2. `FIREFOX_JWT_ISSUER` і `FIREFOX_JWT_SECRET`**
+1. Під тим самим акаунтом.
 2. Відкрити https://addons.mozilla.org/developers/addon/api/key/ (**Developer Hub** → **Tools** → **Manage API Keys**).
 3. Якщо попросить, прийняти угоду для розробників.
 4. **Generate new credentials**. З'являться два значення:

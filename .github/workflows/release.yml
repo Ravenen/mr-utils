@@ -92,7 +92,9 @@ jobs:
           CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}
           CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
           CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
-          FIREFOX_EXTENSION_ID: "{d16c5235-1761-48f3-9fb3-85e3a592e362}"
+          # The add-on's AMO slug or numeric ID, not its {uuid} GUID: publish-browser-extension strips the
+          # braces, and AMO then looks the rest up as a slug and answers 404
+          FIREFOX_EXTENSION_ID: ${{ vars.FIREFOX_EXTENSION_ID }}
           FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
         run: |
@@ -105,7 +107,7 @@ jobs:
           else
             echo "::warning::Chrome Web Store credentials are not set (docs/releasing.md): not submitted"
           fi
-          if [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
+          if [ -n "$FIREFOX_EXTENSION_ID" ] && [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
             # The code is bundled, so AMO gets the sources zip its reviewers rebuild from
             args+=(--firefox-zip "${{ steps.package.outputs.firefox }}" --firefox-sources-zip "${{ steps.package.outputs.sources }}")
           else
