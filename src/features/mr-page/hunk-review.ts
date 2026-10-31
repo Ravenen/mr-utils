@@ -31,6 +31,8 @@ const FILE_PROGRESS = "mrflow-hunk-progress";
 const TREE_PROGRESS = "mrflow-hunk-tree-progress";
 const LEFT = "mrflow-hunks-left";
 const TOGGLE = "mrflow-hunk-toggle";
+const BLOCK_CONTROL = "mrflow-block-control";
+const BLOCK_PLACEHOLDER = "mrflow-block-placeholder";
 const PRUNED = "hunk-review/pruned";
 
 interface Progress {
@@ -47,10 +49,12 @@ interface Progress {
 // Viewed hunks are collapsed (their header stays, with a button to show the lines), the Changes tab
 // counts the hunks left, and Shift+] / Shift+[ go to the next / previous hunk not viewed (GitLab
 // already uses ] and [ for files).
+// A hunk with several blocks of changed lines also gets a checkbox on each block (on its first line),
+// and a viewed block collapses to a thin row of ours; the hunk's checkbox is then half ticked.
 export const hunkReviewFeature: Feature<MrPageRoute> = {
   name: "hunk-review",
   match: (route): route is MrPageRoute => route.kind === "mr-page",
-  settings: ["hunkReview", "hunkCollapseViewed", "hunkHotkeys"],
+  settings: ["hunkReview", "hunkBlockReview", "hunkCollapseViewed", "hunkHotkeys"],
   async mount(ctx) {
     if (!ctx.settings.hunkReview) return;
     const key = hunkMarksKey(ctx.route.projectPath, ctx.route.iid);
@@ -75,9 +79,12 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
     // Files whose Viewed checkbox was unticked while collapsed: their hunks are cleared once shown
     const pendingUnmark = new Set<string>();
     let syncing = false;
-    // Viewed hunks the user opened again, by their first block id
+    // Viewed hunks ("hunk:<first block id>") and blocks (by id) the user opened again
     const expanded = new Set<string>();
     const collapse = ctx.settings.hunkCollapseViewed;
+    const blockReview = ctx.settings.hunkBlockReview;
+    // The block a block checkbox or a collapsed block's row stands for, as of the last read of its file
+    const blockOf = new WeakMap<Element, string>();
 
     const isMarked = (id: string) => id in marks;
     const save = () => {
@@ -117,11 +124,14 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
             if (root) renderFile(readDiffFile(root));
             renderSummary();
           };
+          // Showing a hunk's lines shows its viewed blocks too
+          const setExpanded = (ids: string[], on: boolean) =>
+            [`hunk:${ids[0] ?? ""}`, ...ids].forEach((id) => (on ? expanded.add(id) : expanded.delete(id)));
           if (collapse) {
             control.appendChild(
               toggleButton(() => {
-                const first = controlIds.get(owner)?.[0] ?? "";
-                if (!expanded.delete(first)) expanded.add(first);
+                const ids = controlIds.get(owner) ?? [];
+                setExpanded(ids, !expanded.has(`hunk:${ids[0] ?? ""}`));
                 rerender();
               }),
             );
@@ -132,7 +142,7 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
                 const ids = controlIds.get(owner) ?? [];
                 setMarks(ids, checked);
                 // Ticked again later: collapsed again
-                if (!checked) expanded.delete(ids[0] ?? "");
+                if (!checked) setExpanded(ids, false);
                 rerender();
               },
             }).root,
@@ -141,11 +151,20 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
           added.add(control);
         }
         controlIds.set(control, ids);
+        const blocksViewed = ids.map((id, i) => isMarked(id) || isMarked(oldIds[i] ?? ""));
         const input = control.querySelector("input");
-        if (input) input.checked = viewed;
+        if (input) {
+          input.checked = viewed;
+          input.indeterminate = !viewed && blocksViewed.some(Boolean);
+        }
         hunk.rows.forEach((row) => setFlag(row, "data-mrflow-hunk-viewed", viewed));
 
-        const collapsed = collapse && viewed && !expanded.has(ids[0] ?? "");
+        const collapsed = collapse && viewed && !expanded.has(`hunk:${ids[0] ?? ""}`);
+        const showBlocks = blockReview && hunk.blocks.length > 1;
+        setFlag(control, "data-mrflow-has-blocks", showBlocks);
+        hunk.blockRows.forEach((rows, j) =>
+          renderBlock(rows, ids[j] ?? "", showBlocks, blocksViewed[j] ?? false, collapsed),
+        );
         hunkSpan(hunk).forEach((row) => setFlag(row, "data-mrflow-hunk-collapsed", collapsed));
         const toggle = control.querySelector<HTMLButtonElement>(`.${TOGGLE}`);
         if (toggle) {
@@ -164,6 +183,11 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         }
       });
 
+      // Rows of ours left before lines that are no longer a collapsed block's
+      file.root.querySelectorAll(`.${BLOCK_PLACEHOLDER}`).forEach((row) => {
+        if (!row.nextElementSibling?.hasAttribute("data-mrflow-block-collapsed")) row.remove();
+      });
+
       // A collapsed file shows no lines: keep what it showed last
       if (file.hunks.length > 0) progress.set(file.id, { viewed: viewedCount, total: file.hunks.length });
       renderFileProgress(file, progress.get(file.id), added);
@@ -174,6 +198,84 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         file.viewed.click();
         syncing = false;
       }
+    };
+
+    // A block's checkbox on its first line, and while it is viewed and collapsed, a row of ours before it
+    const renderBlock = (rows: HTMLElement[], id: string, show: boolean, viewed: boolean, hunkCollapsed: boolean) => {
+      const first = rows[0];
+      if (!first) return;
+      let control = first.querySelector<HTMLElement>(`:scope > .${BLOCK_CONTROL}`);
+      const collapsed = show && collapse && viewed && !hunkCollapsed && !expanded.has(id);
+      hunkSpan({ rows }).forEach((row) => setFlag(row, "data-mrflow-block-collapsed", collapsed));
+      setFlag(first, "data-mrflow-block-start", show);
+      if (!show) {
+        control?.remove();
+        return;
+      }
+
+      const rerender = (owner: Element) => {
+        const root = diffFileRoot(owner);
+        if (root) renderFile(readDiffFile(root));
+        renderSummary();
+      };
+      const toggleBlock = (owner: Element, checked: boolean) => {
+        const blockId = blockOf.get(owner) ?? "";
+        setMarks([blockId], checked);
+        if (!checked) expanded.delete(blockId);
+        rerender(owner);
+      };
+      if (!control) {
+        control = document.createElement(first.tagName === "TR" ? "td" : "div");
+        control.className = BLOCK_CONTROL;
+        const owner = control;
+        const box = checkbox("", { onChange: (checked) => toggleBlock(owner, checked) });
+        box.input.setAttribute("aria-label", "Viewed");
+        box.input.title = "Viewed";
+        control.appendChild(box.root);
+        first.appendChild(control);
+        added.add(control);
+      }
+      blockOf.set(control, id);
+      const input = control.querySelector("input");
+      if (input) input.checked = viewed;
+
+      let placeholder = first.previousElementSibling;
+      if (!placeholder?.classList.contains(BLOCK_PLACEHOLDER)) placeholder = null;
+      if (!collapsed) {
+        placeholder?.remove();
+        return;
+      }
+      if (!placeholder) {
+        const row = document.createElement(first.tagName === "TR" ? "tr" : "div");
+        row.className = BLOCK_PLACEHOLDER;
+        const cell = document.createElement(first.tagName === "TR" ? "td" : "div");
+        cell.className = `${BLOCK_PLACEHOLDER}-control`;
+        const toggle = toggleButton(() => {
+          expanded.add(blockOf.get(row) ?? "");
+          rerender(row);
+        });
+        toggle.hidden = false;
+        toggle.classList.remove("btn-icon");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "Show lines");
+        toggle.title = "Show lines";
+        toggle
+          .querySelector("use")
+          ?.setAttribute(
+            "href",
+            toggle.querySelector("use")?.getAttribute("href")?.replace(/#.*$/, "#chevron-right") ?? "",
+          );
+        const box = checkbox("Viewed", { checked: true, onChange: (checked) => toggleBlock(row, checked) });
+        cell.append(toggle, box.root);
+        row.appendChild(cell);
+        first.before(row);
+        added.add(row);
+        placeholder = row;
+      }
+      blockOf.set(placeholder, id);
+      const count = placeholder.querySelector(".gl-button-text");
+      const text = `${rows.length} lines`;
+      if (count && count.textContent !== text) count.textContent = text;
     };
 
     const renderSummary = () => {
@@ -232,7 +334,7 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
           // By key position, so that it works on any keyboard layout
           const step = event.code === "BracketRight" ? 1 : event.code === "BracketLeft" ? -1 : 0;
           if (step === 0) return;
-          const target = nextUnviewedHunk(step);
+          const target = nextUnviewed(step);
           if (!target) return;
           event.preventDefault();
           const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -282,7 +384,13 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       observer.disconnect();
       cancelAnimationFrame(scheduled);
       added.forEach((el) => el.remove());
-      for (const attr of ["data-mrflow-hunk-header", "data-mrflow-hunk-viewed", "data-mrflow-hunk-collapsed"])
+      for (const attr of [
+        "data-mrflow-hunk-header",
+        "data-mrflow-hunk-viewed",
+        "data-mrflow-hunk-collapsed",
+        "data-mrflow-block-start",
+        "data-mrflow-block-collapsed",
+      ])
         document.querySelectorAll(`[${attr}]`).forEach((el) => el.removeAttribute(attr));
     });
   },
@@ -299,11 +407,12 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
-// The header of the next (step 1) or previous (-1) hunk not viewed, from the middle of the window,
-// where the last one gone to was put
-function nextUnviewedHunk(step: 1 | -1): HTMLElement | null {
+// The next (step 1) or previous (-1) hunk header or block line not viewed, from the middle of the
+// window, where the last one gone to was put. A hunk with block checkboxes is gone through by block.
+function nextUnviewed(step: 1 | -1): HTMLElement | null {
   const middle = window.innerHeight / 2;
-  const headers = [...document.querySelectorAll<HTMLElement>(`.${CONTROL}`)]
+  const selector = `.${CONTROL}:not([data-mrflow-has-blocks]), .${BLOCK_CONTROL}`;
+  const headers = [...document.querySelectorAll<HTMLElement>(selector)]
     .filter((control) => !control.querySelector<HTMLInputElement>("input[type=checkbox]")?.checked)
     .map((control) => control.parentElement)
     .filter((header): header is HTMLElement => header !== null);

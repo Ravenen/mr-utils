@@ -120,6 +120,8 @@ export interface DiffHunk {
   // Changed lines grouped in runs without context between them; in a run, removed lines come
   // before added ones in both inline and side-by-side views
   blocks: DiffLine[][];
+  // The rows of each block, in the same order
+  blockRows: HTMLElement[][];
 }
 
 export interface DiffFile {
@@ -251,8 +253,10 @@ function splitHunks(
   const hunks: DiffHunk[] = [];
   let hunk: DiffHunk | null = null;
   let block: DiffLine[] | null = null;
+  let blockRows: HTMLElement[] = [];
   const closeBlock = () => {
     if (block && hunk) {
+      hunk.blockRows.push(blockRows);
       // Side by side pairs a removed and an added line per row: put them in inline order
       hunk.blocks.push([
         ...block.filter((line) => line.change === "removed"),
@@ -260,23 +264,27 @@ function splitHunks(
       ]);
     }
     block = null;
+    blockRows = [];
   };
 
   for (const row of rows) {
     if (isHeader(row)) {
       closeBlock();
-      hunk = { header: row, rows: [], blocks: [] };
+      hunk = { header: row, rows: [], blocks: [], blockRows: [] };
       hunks.push(hunk);
       continue;
     }
     if (!hunk) {
-      hunk = { header: null, rows: [], blocks: [] };
+      hunk = { header: null, rows: [], blocks: [], blockRows: [] };
       hunks.push(hunk);
     }
     hunk.rows.push(row);
     const lines = changes(row);
     if (lines.length === 0) closeBlock();
-    else (block ??= []).push(...lines);
+    else {
+      (block ??= []).push(...lines);
+      blockRows.push(row);
+    }
   }
   closeBlock();
   // A header after the last hunk only expands the rest of the file
@@ -288,8 +296,9 @@ export function changesTabLink(doc: Document = document): HTMLElement | null {
   return doc.querySelector<HTMLElement>("[data-testid='diffs-tab'] a, li.js-diffs-tab a");
 }
 
-// Rows GitLab shows between a hunk's line rows (comments, drafts, comment forms) belong to the hunk too
-export function hunkSpan(hunk: DiffHunk): HTMLElement[] {
+// Rows GitLab shows between a hunk's (or a block's) line rows (comments, drafts, comment forms)
+// belong to it too
+export function hunkSpan(hunk: Pick<DiffHunk, "rows">): HTMLElement[] {
   const first = hunk.rows[0];
   const last = hunk.rows[hunk.rows.length - 1];
   if (!first || !last) return [];

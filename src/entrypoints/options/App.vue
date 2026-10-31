@@ -22,6 +22,7 @@ const animateCards = field("animateCards");
 const approvalGuard = field("approvalGuard");
 const resetChecksOnNewCommits = field("resetChecksOnNewCommits");
 const hunkReview = field("hunkReview");
+const hunkBlockReview = field("hunkBlockReview");
 const hunkCollapseViewed = field("hunkCollapseViewed");
 const hunkHotkeys = field("hunkHotkeys");
 
@@ -140,9 +141,14 @@ async function importFile(event: Event) {
           help="A Viewed checkbox on every hunk, not only on the whole file."
         />
         <GlToggle
+          v-model="hunkBlockReview"
+          label="Block review"
+          help="In a hunk with several blocks of changed lines, a checkbox on each block too."
+        />
+        <GlToggle
           v-model="hunkCollapseViewed"
-          label="Collapse viewed hunks"
-          help="Hides the lines of a hunk once it is viewed; its header has a button to show them."
+          label="Collapse viewed hunks and blocks"
+          help="Hides the lines of a hunk or block once it is viewed, with a button to show them."
         />
         <GlToggle
           v-model="hunkHotkeys"
