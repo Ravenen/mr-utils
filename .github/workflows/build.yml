@@ -10,11 +10,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -39,7 +39,7 @@ jobs:
       - name: E2E tests (Playwright, built Chrome extension on mock GitLab pages)
         run: pnpm e2e
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -54,21 +54,21 @@ jobs:
       - name: Check that the AMO sources zip rebuilds the Firefox build
         run: ./scripts/verify-sources.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         id: upload-chrome
         with:
           name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}-chrome
           path: .output/chrome-mv3/
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         id: upload-firefox
         with:
           name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}-firefox
           path: .output/firefox-mv3/
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         id: upload-sources
         with:
           name: mrflow-${{ steps.package.outputs.version }}-${{ steps.package.outputs.sha }}-amo-sources
