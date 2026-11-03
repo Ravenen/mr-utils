@@ -288,6 +288,15 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   opacity: 0.6;
 }
 
+/* The line's code wraps before the controls: the checkbox, and "v N lines" once the block is viewed */
+[data-mrflow-block-space="narrow"] {
+  padding-right: 3rem !important;
+}
+
+[data-mrflow-block-space="wide"] {
+  padding-right: 8.5rem !important;
+}
+
 [data-mrflow-block-start]:hover > .mrflow-block-control,
 .mrflow-block-control:focus-within {
   opacity: 1;

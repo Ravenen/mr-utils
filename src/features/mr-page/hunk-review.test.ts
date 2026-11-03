@@ -591,4 +591,21 @@ describe("hunk review", () => {
       );
     });
   });
+
+  it("leaves room at the end of a block's first line for its controls", async () => {
+    render(SAMPLE_DIFF, { renderer: "rapid", view: "parallel" });
+    await mount();
+    const firstLine = () => diffFiles()[0]?.hunks[1]?.blockRows[0]?.[0] as HTMLElement;
+    const space = () =>
+      [...firstLine().querySelectorAll("[data-mrflow-block-space]")].map((c) =>
+        c.getAttribute("data-mrflow-block-space"),
+      );
+    // Only the right-hand code cell, where the controls are
+    expect(space()).toEqual(["narrow"]);
+    expect(firstLine().querySelectorAll("td")[3]?.getAttribute("data-mrflow-block-space")).toBe("narrow");
+    document.querySelectorAll<HTMLInputElement>(".mrflow-block-control input")[0]?.click();
+    document.querySelector<HTMLButtonElement>(".mrflow-block-placeholder .mrflow-hunk-toggle")?.click();
+    // Viewed and shown: "v N lines" too
+    expect(space()).toEqual(["wide"]);
+  });
 });
