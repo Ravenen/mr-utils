@@ -291,6 +291,11 @@ function splitHunks(
   return hunks.filter((h) => h.blocks.length > 0);
 }
 
+// The code cells of a diff row, left to right (two side by side, one inline), in both renderers
+export function lineContentCells(row: Element): HTMLElement[] {
+  return [...row.querySelectorAll<HTMLElement>(":scope > td.rd-line-content, .line_content")];
+}
+
 // The link of the MR's Changes tab, which holds its file count badge
 export function changesTabLink(doc: Document = document): HTMLElement | null {
   return doc.querySelector<HTMLElement>("[data-testid='diffs-tab'] a, li.js-diffs-tab a");

@@ -6,6 +6,7 @@ import {
   diffTreeRows,
   isDiffFileViewedCheckbox,
   hunkSpan,
+  lineContentCells,
   readDiffFile,
   type DiffFile,
   type DiffHunk,
@@ -195,6 +196,13 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       const collapsed = show && collapse && viewed && !hunkCollapsed && !expanded.has(id);
       hunkSpan({ rows }).forEach((row) => setFlag(row, "data-mrflow-block-collapsed", collapsed));
       setFlag(first, "data-mrflow-block-start", show);
+      // Room for the controls at the end of the line, so that long code wraps before them instead of under them
+      const space = show ? (collapse && viewed ? "wide" : "narrow") : null;
+      const cell = lineContentCells(first).at(-1);
+      if (cell && cell.getAttribute("data-mrflow-block-space") !== space) {
+        if (space) cell.setAttribute("data-mrflow-block-space", space);
+        else cell.removeAttribute("data-mrflow-block-space");
+      }
       if (!show) {
         control?.remove();
         return;
@@ -377,6 +385,7 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
         "data-mrflow-hunk-collapsed",
         "data-mrflow-block-start",
         "data-mrflow-block-collapsed",
+        "data-mrflow-block-space",
       ])
         document.querySelectorAll(`[${attr}]`).forEach((el) => el.removeAttribute(attr));
     });

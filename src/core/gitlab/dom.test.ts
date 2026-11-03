@@ -6,6 +6,7 @@ import {
   approvalsWidget,
   changesTabLink,
   hunkSpan,
+  lineContentCells,
   diffFileRoot,
   diffFileRootsIn,
   diffFiles,
@@ -187,4 +188,18 @@ describe("MR changes", () => {
     document.body.innerHTML = `<li class="diffs-tab js-diffs-tab"><a data-action="diffs">Changes</a></li>`;
     expect(changesTabLink()).not.toBeNull();
   });
+
+  for (const renderer of ["vue", "rapid"] as const) {
+    it(`finds a row's code cells, left to right (${renderer})`, () => {
+      document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { renderer, view: "parallel" });
+      const row = diffFiles()[0]?.hunks[1]?.blockRows[0]?.[0] as HTMLElement;
+      const cells = lineContentCells(row);
+      expect(cells.map((cell) => cell.textContent?.trim())).toEqual([
+        "render(columns);",
+        "render(columns, { animate });",
+      ]);
+      document.body.innerHTML = diffFilesMarkup(SAMPLE_DIFF, { renderer, view: "inline" });
+      expect(lineContentCells(diffFiles()[0]?.hunks[1]?.blockRows[0]?.[0] as HTMLElement)).toHaveLength(1);
+    });
+  }
 });
