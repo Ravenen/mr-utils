@@ -583,6 +583,9 @@ describe("hunk review", () => {
       const lineToggle = document.querySelectorAll<HTMLButtonElement>(".mrflow-block-control .mrflow-hunk-toggle")[1];
       expect(lineToggle?.hidden).toBe(false);
       expect(lineToggle?.getAttribute("aria-expanded")).toBe("true");
+      // Only the number on a line of code; the rest in its title
+      expect(lineToggle?.textContent).toBe("1");
+      expect(lineToggle?.title).toBe("Hide lines (1 line)");
       lineToggle?.click();
       expect(placeholders()).toHaveLength(1);
       // Not viewed: no button on the line

@@ -243,7 +243,8 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       const input = control.querySelector("input");
       if (input) input.checked = viewed;
       const blockToggle = control.querySelector<HTMLButtonElement>(`.${TOGGLE}`);
-      if (blockToggle) renderToggle(blockToggle, viewed, false, rows.length);
+      // Only the number on a line of code, so that the controls fit the room the code keeps for them
+      if (blockToggle) renderToggle(blockToggle, viewed, false, rows.length, true);
 
       let placeholder = first.previousElementSibling;
       if (!placeholder?.classList.contains(BLOCK_PLACEHOLDER)) placeholder = null;
@@ -418,15 +419,16 @@ function nextUnviewed(step: 1 | -1): HTMLElement | null {
     : (headers.reverse().find((header) => top(header) < middle - 1) ?? null);
 }
 
-// A viewed hunk's or block's button: "> N lines" while collapsed, "v N lines" while shown
-function renderToggle(toggle: HTMLButtonElement, viewed: boolean, collapsed: boolean, lines: number) {
+// A viewed hunk's or block's button: "> N lines" while collapsed, "v N lines" while shown ("v N" when short)
+function renderToggle(toggle: HTMLButtonElement, viewed: boolean, collapsed: boolean, lines: number, short = false) {
   toggle.hidden = !viewed;
   const label = collapsed ? "Show lines" : "Hide lines";
   toggle.setAttribute("aria-expanded", String(!collapsed));
   toggle.setAttribute("aria-label", `${label} (${lines})`);
-  toggle.title = label;
+  const linesText = lines === 1 ? "1 line" : `${lines} lines`;
+  toggle.title = `${label} (${linesText})`;
   const count = toggle.querySelector(".gl-button-text");
-  const text = lines === 1 ? "1 line" : `${lines} lines`;
+  const text = short ? String(lines) : linesText;
   if (count && count.textContent !== text) count.textContent = text;
   const use = toggle.querySelector("use");
   const icon = collapsed ? "chevron-right" : "chevron-down";

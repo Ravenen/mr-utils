@@ -281,7 +281,8 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   align-items: center;
   height: 100%;
   max-height: 1.6em;
-  padding: 0 var(--gl-spacing-scale-5, 1rem);
+  /* No left padding: the code keeps 6rem for the controls (see data-mrflow-block-space) */
+  padding: 0 var(--gl-spacing-scale-5, 1rem) 0 0;
   border: 0 !important;
   background: none !important;
   font-family: var(--gl-font-family-regular, var(--default-regular-font, sans-serif));
@@ -294,7 +295,7 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
 }
 
 [data-mrflow-block-space="wide"] {
-  padding-right: 8.5rem !important;
+  padding-right: 6rem !important;
 }
 
 [data-mrflow-block-start]:hover > .mrflow-block-control,
@@ -348,4 +349,10 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   color: var(--gl-text-color-subtle);
   font-size: 0.75rem;
   line-height: 1rem;
+}
+
+/* Tighter on a line of code, to fit the room the code keeps for it */
+.mrflow-block-control > .mrflow-hunk-toggle.btn.gl-button {
+  margin-right: var(--gl-spacing-scale-2, 0.25rem);
+  padding: 0 !important;
 }
