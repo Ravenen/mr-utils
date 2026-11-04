@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.1.0](https://github.com/Ravenen/mr-utils/compare/v2.0.0...v2.1.0) (2026-11-04)
+
+
+### Features
+
+* collapse viewed hunks, hunks-left counter, Shift+] / Shift+[ navigation ([bc4543f](https://github.com/Ravenen/mr-utils/commit/bc4543f3a41318fc8315cacf11d7d9ef5f472bef))
+* hunk marks kept per block across pushes, file progress, sync with Viewed ([08dd2c2](https://github.com/Ravenen/mr-utils/commit/08dd2c2d4207d57e48a9734d79cb59c906d19dc7))
+* Viewed checkbox and collapsing for each block of changed lines in a hunk ([b895dfb](https://github.com/Ravenen/mr-utils/commit/b895dfb6ceba5c8587f2932ba9361bde0e42c3b0))
+* Viewed checkbox on every hunk of the Changes tab (prototype) ([ddff2c5](https://github.com/Ravenen/mr-utils/commit/ddff2c5cc2d51fdf7e39b674c45b4d74ae876578))
+
+
+### Bug Fixes
+
+* a block's controls no longer cover long code in side by side ([fb42d02](https://github.com/Ravenen/mr-utils/commit/fb42d02834e39235833c98a95fdb073becaee32b))
+* a viewed block's controls fit 6rem at the end of its line ([387fe2c](https://github.com/Ravenen/mr-utils/commit/387fe2c7b42f44cd5bbdcfcdb89a3e5ee7321258))
+* block review in a file's top hunk, and the same show/hide controls everywhere ([657fa54](https://github.com/Ravenen/mr-utils/commit/657fa54d172a6c1e724cc881c8f5b2ef95d961a3))
+
+
+### Refactoring
+
+* drop the Shift+] / Shift+[ shortcuts of hunk review ([1e325a0](https://github.com/Ravenen/mr-utils/commit/1e325a0b1d5ccd04c66c2d1386f7b8d5f9ddc6ff))
+
+
+### Styles
+
+* a block's button keeps its arrow by the number and room after it ([f804ce4](https://github.com/Ravenen/mr-utils/commit/f804ce4c053628ec958b05476dd6ef519568d0ee))
+
 ## [2.0.0](https://github.com/Ravenen/mr-utils/compare/7fa8b09...v2.0.0) (2026-10-31)
 
 
