@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/Ravenen/mr-utils/compare/v2.1.0...v2.1.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* hunk review no longer adds controls to the diff inside an Overview thread ([e2432de](https://github.com/Ravenen/mr-utils/commit/e2432de0477298a4d3f0e18dc25c3f3bb7db9233))
+
 ## [2.1.0](https://github.com/Ravenen/mr-utils/compare/v2.0.0...v2.1.0) (2026-11-04)
 
 
