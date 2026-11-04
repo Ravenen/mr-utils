@@ -351,8 +351,14 @@ ul[data-mrflow-board] > [data-mrflow-moving] {
   line-height: 1rem;
 }
 
-/* Tighter on a line of code, to fit the room the code keeps for it */
+/* Tighter on a line of code, to fit the room the code keeps for it: the arrow right by the number,
+   and a little room after the number, inside the button's hover background */
 .mrflow-block-control > .mrflow-hunk-toggle.btn.gl-button {
+  gap: 0.125rem;
   margin-right: var(--gl-spacing-scale-2, 0.25rem);
-  padding: 0 !important;
+  padding: 0 var(--gl-spacing-scale-2, 0.25rem) 0 0.125rem !important;
+}
+
+.mrflow-block-control > .mrflow-hunk-toggle.btn.gl-button > svg {
+  margin: 0;
 }
