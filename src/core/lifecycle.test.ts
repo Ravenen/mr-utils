@@ -17,7 +17,6 @@ const SETTINGS: Settings = {
   hunkReview: true,
   hunkBlockReview: true,
   hunkCollapseViewed: true,
-  hunkHotkeys: true,
 };
 
 // Navigation is driven by hand instead of by DOM mutations

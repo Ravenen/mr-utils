@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { browser } from "wxt/browser";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 import { diffFiles } from "@/core/gitlab/dom";
@@ -330,61 +330,6 @@ describe("hunk review", () => {
     expect(left()?.classList.contains("badge-success")).toBe(true);
   });
 
-  describe("keyboard shortcuts", () => {
-    const scrolled: Element[] = [];
-    beforeEach(() => {
-      scrolled.length = 0;
-      Element.prototype.scrollIntoView = function (this: Element) {
-        scrolled.push(this);
-      };
-      Element.prototype.animate = vi.fn() as unknown as Element["animate"];
-      window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
-    });
-
-    // Lays the hunk headers out 300px apart, the first one at `from`, in a 600px window
-    function layout(from: number) {
-      vi.spyOn(window, "innerHeight", "get").mockReturnValue(600);
-      document.querySelectorAll(".mrflow-hunk-control").forEach((control, i) => {
-        (control.parentElement as HTMLElement).getBoundingClientRect = () => ({ top: from + i * 300 }) as DOMRect;
-      });
-    }
-    const press = (code: string, init: KeyboardEventInit = { shiftKey: true }, target: EventTarget = document.body) =>
-      target.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true, ...init }));
-    const headers = () => [...document.querySelectorAll(".mrflow-hunk-control")].map((c) => c.parentElement);
-
-    it("Shift+] and Shift+[ go to the next and previous hunk not viewed", async () => {
-      render();
-      await mount();
-      controls()[1]?.click();
-      // Headers at 100, 400, 700: the window's middle is 300
-      layout(100);
-      press("BracketRight");
-      // The second hunk is viewed: on to the third
-      expect(scrolled).toEqual([headers()[2]]);
-      press("BracketLeft");
-      expect(scrolled.at(-1)).toBe(headers()[0]);
-    });
-
-    it("leaves ] and [ to GitLab, and typing alone", async () => {
-      render();
-      document.body.insertAdjacentHTML("beforeend", `<textarea id="note"></textarea>`);
-      await mount();
-      layout(100);
-      press("BracketRight", {});
-      press("BracketRight", { shiftKey: true, ctrlKey: true });
-      press("BracketRight", { shiftKey: true }, document.getElementById("note") as HTMLElement);
-      expect(scrolled).toEqual([]);
-    });
-
-    it("can be turned off", async () => {
-      render();
-      await mount({ hunkHotkeys: false });
-      layout(100);
-      press("BracketRight");
-      expect(scrolled).toEqual([]);
-    });
-  });
-
   describe("blocks of changed lines", () => {
     const blockBoxes = () => [...document.querySelectorAll<HTMLInputElement>(".mrflow-block-control input")];
     const placeholders = () => [...document.querySelectorAll<HTMLElement>(".mrflow-block-placeholder")];
@@ -484,32 +429,6 @@ describe("hunk review", () => {
       render();
       await mount({ hunkBlockReview: false });
       expect(blockBoxes()).toHaveLength(0);
-    });
-
-    it("Shift+] goes through a hunk block by block", async () => {
-      render();
-      await mount();
-      Element.prototype.scrollIntoView = function (this: Element) {
-        scrolled.push(this);
-      };
-      Element.prototype.animate = vi.fn() as unknown as Element["animate"];
-      window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
-      const scrolled: Element[] = [];
-      vi.spyOn(window, "innerHeight", "get").mockReturnValue(600);
-      // In page order: hunk 1 header, block 1 line, block 2 line, README's hunk header
-      const targets = [
-        controls()[0]?.parentElement,
-        secondHunk().blockRows[0]?.[0],
-        secondHunk().blockRows[1]?.[0],
-        controls()[2]?.parentElement,
-      ] as HTMLElement[];
-      targets.forEach((el, i) => (el.getBoundingClientRect = () => ({ top: 100 + i * 300 }) as DOMRect));
-      blockBoxes()[0]?.click();
-      document.body.dispatchEvent(
-        new KeyboardEvent("keydown", { code: "BracketRight", shiftKey: true, bubbles: true }),
-      );
-      // Block 1 is viewed: on to block 2
-      expect(scrolled).toEqual([targets[2]]);
     });
   });
 

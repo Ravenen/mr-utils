@@ -121,7 +121,6 @@ export const SETTINGS: Settings = {
   hunkReview: true,
   hunkBlockReview: true,
   hunkCollapseViewed: true,
-  hunkHotkeys: true,
 };
 
 // A mount context for one feature, as startFeatures builds it. Pass the cache of an earlier context to
