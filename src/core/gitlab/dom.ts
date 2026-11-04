@@ -140,7 +140,9 @@ export interface DiffFile {
 }
 
 const RAPID_FILE = "diff-file[data-testid='rd-diff-file']";
-const VUE_FILE = ".diff-file.file-holder";
+// A thread on the Overview tab shows a trimmed copy of the diff in the same markup (.discussion-wrapper):
+// it is not a file of the Changes tab, so it is left out
+const VUE_FILE = ".diff-file.file-holder:not(.discussion-wrapper)";
 
 // Every diff file on the page, in page order
 export function diffFiles(root: ParentNode = document): DiffFile[] {
