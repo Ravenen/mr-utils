@@ -47,15 +47,14 @@ interface Progress {
 // its hunks are viewed, GitLab's own Viewed checkbox of the file is ticked, and unticking it clears
 // the file's hunks. GitLab mounts and drops diff files as they load and scroll, so the page is watched
 // and only the files a change touched are read again.
-// Viewed hunks are collapsed (their header stays, with a button to show the lines), the Changes tab
-// counts the hunks left, and Shift+] / Shift+[ go to the next / previous hunk not viewed (GitLab
-// already uses ] and [ for files).
+// Viewed hunks are collapsed (their header stays, with a button to show the lines), and the Changes
+// tab counts the hunks left.
 // A hunk with several blocks of changed lines also gets a checkbox on each block (on its first line),
 // and a viewed block collapses to a thin row of ours; the hunk's checkbox is then half ticked.
 export const hunkReviewFeature: Feature<MrPageRoute> = {
   name: "hunk-review",
   match: (route): route is MrPageRoute => route.kind === "mr-page",
-  settings: ["hunkReview", "hunkBlockReview", "hunkCollapseViewed", "hunkHotkeys"],
+  settings: ["hunkReview", "hunkBlockReview", "hunkCollapseViewed"],
   async mount(ctx) {
     if (!ctx.settings.hunkReview) return;
     const key = hunkMarksKey(ctx.route.projectPath, ctx.route.iid);
@@ -162,7 +161,6 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
 
         const collapsed = collapse && viewed && !expanded.has(`hunk:${ids[0] ?? ""}`);
         const showBlocks = blockReview && hunk.blocks.length > 1;
-        setFlag(control, "data-mrflow-has-blocks", showBlocks);
         hunk.blockRows.forEach((rows, j) =>
           renderBlock(rows, ids[j] ?? "", showBlocks, blocksViewed[j] ?? false, collapsed),
         );
@@ -322,31 +320,6 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
       { signal: ctx.signal },
     );
 
-    if (ctx.settings.hunkHotkeys) {
-      document.addEventListener(
-        "keydown",
-        (event) => {
-          if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
-          // By key position, so that it works on any keyboard layout
-          const step = event.code === "BracketRight" ? 1 : event.code === "BracketLeft" ? -1 : 0;
-          if (step === 0) return;
-          const target = nextUnviewed(step);
-          if (!target) return;
-          event.preventDefault();
-          const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-          target.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
-          target.animate(
-            [
-              { boxShadow: "inset 0 0 0 2px var(--gl-focus-ring-outer-color, #1f75cb)" },
-              { boxShadow: "inset 0 0 0 2px transparent" },
-            ],
-            { duration: 1200, easing: "ease-out" },
-          );
-        },
-        { signal: ctx.signal },
-      );
-    }
-
     watchHunkMarks(
       key,
       (changed) => {
@@ -395,28 +368,6 @@ export const hunkReviewFeature: Feature<MrPageRoute> = {
 
 function setFlag(element: Element, name: string, on: boolean) {
   if (element.hasAttribute(name) !== on) element.toggleAttribute(name, on);
-}
-
-function isTyping(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-  );
-}
-
-// The next (step 1) or previous (-1) hunk header or block line not viewed, from the middle of the
-// window, where the last one gone to was put. A hunk with block checkboxes is gone through by block.
-function nextUnviewed(step: 1 | -1): HTMLElement | null {
-  const middle = window.innerHeight / 2;
-  const selector = `.${CONTROL}:not([data-mrflow-has-blocks]), .${BLOCK_CONTROL}`;
-  const headers = [...document.querySelectorAll<HTMLElement>(selector)]
-    .filter((control) => !control.querySelector<HTMLInputElement>("input[type=checkbox]")?.checked)
-    .map((control) => control.parentElement)
-    .filter((header): header is HTMLElement => header !== null);
-  const top = (header: HTMLElement) => header.getBoundingClientRect().top;
-  return step === 1
-    ? (headers.find((header) => top(header) > middle + 1) ?? null)
-    : (headers.reverse().find((header) => top(header) < middle - 1) ?? null);
 }
 
 // A viewed hunk's or block's button: "> N lines" while collapsed, "v N lines" while shown ("v N" when short)

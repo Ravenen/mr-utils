@@ -20,8 +20,6 @@ export interface Settings {
   hunkBlockReview: boolean;
   // Hides the lines of a viewed hunk, as GitLab collapses a viewed file
   hunkCollapseViewed: boolean;
-  // Shift+] / Shift+[: next / previous hunk not viewed
-  hunkHotkeys: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -36,7 +34,6 @@ export const DEFAULT_SETTINGS: Settings = {
   hunkReview: true,
   hunkBlockReview: true,
   hunkCollapseViewed: true,
-  hunkHotkeys: true,
 };
 
 // Keys MRFlow 1.x kept at the top level of storage.sync
@@ -60,7 +57,6 @@ export function normalizeSettings(raw: unknown): Settings {
     hunkReview: bool(value.hunkReview, DEFAULT_SETTINGS.hunkReview),
     hunkBlockReview: bool(value.hunkBlockReview, DEFAULT_SETTINGS.hunkBlockReview),
     hunkCollapseViewed: bool(value.hunkCollapseViewed, DEFAULT_SETTINGS.hunkCollapseViewed),
-    hunkHotkeys: bool(value.hunkHotkeys, DEFAULT_SETTINGS.hunkHotkeys),
   };
 }
 

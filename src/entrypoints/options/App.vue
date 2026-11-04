@@ -24,7 +24,6 @@ const resetChecksOnNewCommits = field("resetChecksOnNewCommits");
 const hunkReview = field("hunkReview");
 const hunkBlockReview = field("hunkBlockReview");
 const hunkCollapseViewed = field("hunkCollapseViewed");
-const hunkHotkeys = field("hunkHotkeys");
 
 const approvalsInvalid = ref(false);
 function setApprovalsNeeded(event: Event) {
@@ -149,11 +148,6 @@ async function importFile(event: Event) {
           v-model="hunkCollapseViewed"
           label="Collapse viewed hunks and blocks"
           help="Hides the lines of a hunk or block once it is viewed, with a button to show them."
-        />
-        <GlToggle
-          v-model="hunkHotkeys"
-          label="Keyboard shortcuts"
-          help="Shift+] and Shift+[ go to the next and previous hunk not viewed yet."
         />
       </section>
 

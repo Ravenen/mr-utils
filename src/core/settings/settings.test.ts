@@ -39,7 +39,6 @@ describe("migrateSettings", () => {
       hunkReview: true,
       hunkBlockReview: true,
       hunkCollapseViewed: true,
-      hunkHotkeys: true,
     });
   });
 
@@ -58,6 +57,11 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ approvalsNeeded: 0, boardLoading: "fast", kanbanView: "yes", extra: 1 })).toEqual(
       DEFAULT_SETTINGS,
     );
+  });
+
+  it("drops a setting that no longer exists", () => {
+    // hunkHotkeys was stored by 2.1 until the shortcuts went away
+    expect(normalizeSettings({ ...DEFAULT_SETTINGS, hunkHotkeys: false })).toEqual(DEFAULT_SETTINGS);
   });
 
   it("turns a feature added after the stored settings on", () => {

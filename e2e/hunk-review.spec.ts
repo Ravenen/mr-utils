@@ -75,11 +75,7 @@ for (const renderer of ["vue", "rapid"] as const) {
   });
 }
 
-test("viewed hunks collapse, the Changes tab counts the rest, and Shift+] goes to the next one", async ({
-  page,
-  gitlab,
-}) => {
-  // Enough hunks to scroll through
+test("viewed hunks collapse and the Changes tab counts the rest", async ({ page, gitlab }) => {
   gitlab.diffs = Array.from({ length: 6 }, (_, i) => ({
     path: `src/file${i}.ts`,
     hunks: [
@@ -102,16 +98,6 @@ test("viewed hunks collapse, the Changes tab counts the rest, and Shift+] goes t
   await expect(file0.locator("tr[data-hunk-lines]").first()).toBeHidden();
   await file0.getByRole("button", { name: "Show lines" }).click();
   await expect(file0.locator("tr[data-hunk-lines]").first()).toBeVisible();
-
-  // Shift+] skips the viewed hunk and brings the next one to the middle of the window
-  await page.keyboard.press("Shift+BracketRight");
-  const header = page.locator("[data-testid='rd-diff-file']").nth(1).locator("tr[data-hunk-header]").first();
-  await expect
-    .poll(async () => {
-      const box = await header.boundingBox();
-      return box ? Math.abs(box.y + box.height / 2 - 300) < 40 : false;
-    })
-    .toBe(true);
 });
 
 for (const renderer of ["vue", "rapid"] as const) {
