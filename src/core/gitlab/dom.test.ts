@@ -152,6 +152,15 @@ describe("MR changes", () => {
     expect(blocks(diffFiles()[0] as DiffFile)).toEqual([[["ra = 1", "aa = 2"]]]);
   });
 
+  it("skips the diff copy inside a thread of the Overview tab", () => {
+    document.body.innerHTML = `<div class="discussion-body"><div class="diff-file file-holder card discussion-wrapper text-file"><div class="diff-content"><table><tbody>
+      <tr class="line_holder match"><td class="line_content match">@@ -1 +1 @@</td></tr>
+      <tr class="line_holder"><td class="line_content old">a = 1</td></tr>
+      <tr class="line_holder"><td class="line_content new">a = 2</td></tr>
+    </tbody></table></div></div></div>`;
+    expect(diffFiles()).toEqual([]);
+  });
+
   for (const renderer of ["vue", "rapid"] as const) {
     it(`links files to the tree, their header and their Viewed checkbox (${renderer})`, () => {
       document.body.innerHTML = diffTreeMarkup(SAMPLE_DIFF) + diffFilesMarkup(SAMPLE_DIFF, { renderer });
