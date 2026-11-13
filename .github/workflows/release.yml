@@ -1,8 +1,10 @@
 name: Release
 
-# Every push to main updates a release PR (version bump in package.json + CHANGELOG.md) from the
-# Conventional Commits since the last release. Merging that PR tags vX.Y.Z, creates the GitHub
-# release, and the publish job below builds it and submits it to the Chrome Web Store and AMO.
+# Every push to main updates the release PR (branch release/next, scripts/release-pr.sh): the next
+# version from the Conventional Commits since the last tag (git-cliff, cliff.toml) in package.json and
+# its section on top of CHANGELOG.md. Merging that PR leaves main with a version that has no tag yet:
+# the release job then tags vX.Y.Z, creates the GitHub release from its CHANGELOG section, and the
+# publish job below builds it and submits it to the Chrome Web Store and AMO.
 # The publish job runs in this workflow because a tag pushed with GITHUB_TOKEN starts no workflows.
 # Store credentials: see docs/releasing.md. Without them the stores are skipped with a warning.
 
@@ -23,26 +25,53 @@ permissions:
   contents: write
   pull-requests: write
 
+# One run at a time, so the release PR and the tags follow the pushes in order
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  release-please:
+  release:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: googleapis/release-please-action@v5
-        id: release
+      - uses: actions/checkout@v7
         with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+          # All history and tags: the changelog is everything since the last tag
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Tag the version of a merged release PR
+        id: tag
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if git rev-parse --quiet --verify "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released"
+            exit 0
+          fi
+          # Its CHANGELOG section, without the heading, is the text of the GitHub release
+          awk -v heading="## [$version]" 'index($0, "## [") == 1 { if (found) exit; found = index($0, heading) == 1; next } found' \
+            CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file "$RUNNER_TEMP/notes.md"
+          echo "tag_name=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the release PR
+        if: steps.tag.outputs.tag_name == ''
+        run: scripts/release-pr.sh
 
   publish:
-    needs: release-please
-    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch')
+    needs: release
+    if: always() && (needs.release.outputs.tag_name != '' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
+      TAG: ${{ needs.release.outputs.tag_name || inputs.tag }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     steps:
       - uses: actions/checkout@v7

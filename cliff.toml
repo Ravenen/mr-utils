@@ -1,0 +1,59 @@
+# git-cliff (https://git-cliff.org): CHANGELOG.md and the next version from Conventional Commits.
+# Used by .github/workflows/release.yml, see docs/releasing.md. Only the commits since the last tag are
+# read (`--unreleased`, i.e. `git log <tag>..HEAD`), so a PR merged with a merge commit counts in full
+# whatever the dates of its commits, and the merge commit itself is skipped.
+
+[changelog]
+# The header and the older releases stay in CHANGELOG.md: the workflow inserts the new section
+header = ""
+body = """
+{% set repo = "https://github.com/Ravenen/mr-utils" %}\
+## [{{ version | trim_start_matches(pat="v") }}]\
+({{ repo }}/compare/{{ previous.version }}...{{ version }}) \
+({{ timestamp | date(format="%Y-%m-%d") }})
+
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking | length > 0 %}
+### ⚠ BREAKING CHANGES
+
+{% for commit in breaking -%}
+* {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{{ commit.breaking_description | default(value=commit.message) | split(pat="\n") | first | trim }} \
+([{{ commit.id | truncate(length=7, end="") }}]({{ repo }}/commit/{{ commit.id }}))
+{% endfor %}
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+
+{% for commit in commits -%}
+* {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{{ commit.message | split(pat="\n") | first | trim }} \
+([{{ commit.id | truncate(length=7, end="") }}]({{ repo }}/commit/{{ commit.id }}))
+{% endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = false
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# Only the types listed below; the rest (docs, test, ci, chore, merge commits, ...) are left out
+filter_commits = true
+protect_breaking_commits = true
+commit_parsers = [
+  { message = "^Merge ", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+  { message = "^style", group = "<!-- 4 -->Styles" },
+  { message = "^build", group = "<!-- 5 -->Build" },
+]
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+sort_commits = "oldest"
+
+[bump]
+features_always_bump_minor = true
+breaking_always_bump_major = true

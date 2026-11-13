@@ -17,14 +17,13 @@
    - `feat!:` або футер `BREAKING CHANGE:` → мажорна (2.0.0 → 3.0.0);
    - футер `Release-As: x.y.z` задає версію явно (так перший реліз стане 2.0.0);
    - `docs:`, `test:`, `ci:`, `chore:` версію не змінюють і в CHANGELOG не потрапляють.
-2. **Release PR.** Після кожного пушу в `main` workflow **Release** (`.github/workflows/release.yml`) запускає [release-please](https://github.com/googleapis/release-please). Той відкриває або оновлює PR з назвою на кшталт `chore(main): release 2.0.0`. У ньому:
+2. **Release PR.** Після кожного пушу в `main` workflow **Release** (`.github/workflows/release.yml`) запускає `scripts/release-pr.sh`. Скрипт бере всі коміти від останнього тегу (`git log vX.Y.Z..HEAD`), рахує з них нову версію і розділ CHANGELOG ([git-cliff](https://git-cliff.org), налаштування в `cliff.toml`) і відкриває або оновлює PR `chore(release): X.Y.Z` з гілки `release/next`. У ньому:
    - `version` у `package.json` (manifest бере версію звідти);
-   - нові записи в `CHANGELOG.md`, згруповані за типом комітів;
-   - `.release-please-manifest.json` з новою версією.
+   - новий розділ угорі `CHANGELOG.md`, згрупований за типом комітів.
 
-   Поки PR не злитий, кожен новий коміт у `main` додається до нього, а версія за потреби перераховується. Release PR — це просто «кошик» змін до наступного релізу.
+   Поки PR не злитий, кожен новий коміт у `main` перебудовує його з нуля, а версія за потреби перераховується. Release PR — це просто «кошик» змін до наступного релізу. Якщо від останнього тегу немає комітів, що потрапляють у CHANGELOG, PR не відкривається.
 3. **Злиття release PR — це і є реліз.** Той самий workflow:
-   - ставить тег `vX.Y.Z` і створює GitHub Release з текстом із CHANGELOG;
+   - бачить у `package.json` версію, для якої ще немає тегу, ставить тег `vX.Y.Z` і створює GitHub Release з текстом її розділу CHANGELOG;
    - запускає lint, typecheck і тести, збирає Chrome і Firefox;
    - перевіряє, що sources zip відтворює Firefox-збірку (`scripts/verify-sources.sh`);
    - прикріплює до GitHub Release `mrflow-X.Y.Z-chrome.zip`, `-firefox.zip` і `-sources.zip`;
@@ -41,10 +40,31 @@
 4. За кілька хвилин перевірити: вкладка **Actions** → **Release** зелений, у **Releases** з'явилась версія з трьома zip, у дашбордах магазинів нова версія стоїть на рев'ю.
 
 **Один раз (налаштування):**
-1. Дозволити GitHub Actions створювати PR: репозиторій → **Settings** → **Actions** → **General** → **Workflow permissions** → увімкнути **Allow GitHub Actions to create and approve pull requests** → **Save**. Без цього release-please не відкриє release PR.
-2. Зливати PR через **rebase** (або squash), а не merge-комітом: **Settings** → **General** → **Pull Requests** → вимкнути **Allow merge commits**, лишити **Allow rebase merging**. Release-please бере в CHANGELOG і коміти, і merge-коміт, у тексті якого стоїть назва PR. Якщо назва PR збігається з повідомленням коміту, кожен запис з'являється двічі.
+1. Дозволити GitHub Actions створювати PR: репозиторій → **Settings** → **Actions** → **General** → **Workflow permissions** → увімкнути **Allow GitHub Actions to create and approve pull requests** → **Save**. Без цього workflow не відкриє release PR.
+2. **Settings** → **General** → **Pull Requests**: лишити **Allow merge commits** (як зливати — нижче, «Злиття PR і каскади») і увімкнути **Automatically delete head branches**: тоді після злиття PR GitHub сам перемикає PR, що стояли на його гілці, на `main`, а не закриває їх.
 3. Додати ключі магазинів (нижче).
 4. Перевірити ключі ще до першого релізу (нижче, «Перевірка без релізу»).
+
+## Злиття PR і каскади
+
+PR зливаються звичайним **Create a merge commit**. У CHANGELOG потрапляють коміти всередині PR, по одному запису на коміт з типом `feat`, `fix`, `perf`, `refactor`, `style` або `build`. Сам merge-коміт (`Merge pull request #N …`) пропускається, тож назва PR може бути будь-якою і дублікатів не дає.
+
+Каскад (PR A на `main`, PR B на гілці A) зливається по черзі знизу вгору, без перебазування:
+1. Злити A. Її коміти потрапляють у `main` з тими самими SHA.
+2. GitHub сам перемикає базу B на `main` (з **Automatically delete head branches**; інакше змінити базу вручну кнопкою **Edit** біля назви PR **до** видалення гілки A, бо після видалення GitHub закриє B). У B лишаються тільки її власні коміти.
+3. Дочекатися CI на B і злити її. Для довшого каскаду — так само далі.
+
+Оновлювати гілку PR свіжим `main` можна кнопкою **Update branch** або `git merge origin/main`: такі merge-коміти теж пропускаються.
+
+### Чому git-cliff, а не release-please
+
+До 2.1.1 релізи робив [release-please](https://github.com/googleapis/release-please). Він розрахований на squash-злиття, а з merge-комітами має дві вади, які не вимикаються налаштуваннями:
+- **Дублікати.** Він ділить повідомлення коміту на кілька записів за абзацами `feat: …`, а GitHub пише назву PR другим абзацом merge-коміту. Звідси подвійні записи в 2.0.0, прибрані вручну комітом `5c252a1`.
+- **Загублені коміти.** Він іде історією `main` у порядку, який віддає GitHub (за датою коміту), і зупиняється на коміті попереднього релізу. Коміти PR, створені до цього релізу, а злиті після, лишаються за ним і не потрапляють ні в CHANGELOG, ні в розрахунок версії.
+
+git-cliff бере діапазон `останній тег..HEAD` за графом комітів, тож дати не мають значення, а merge-коміти пропускає правило в `cliff.toml`.
+
+Перевірити, що потрапить у наступний реліз, нічого не змінюючи: `scripts/release-pr.sh --dry-run`.
 
 ## Ключі магазинів
 

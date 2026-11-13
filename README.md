@@ -74,7 +74,7 @@ pnpm zip:firefox              # .output/mrflow-<version>-firefox.zip + .output/m
 
 ### Releasing
 
-Automated with release-please: merging the release PR publishes to the Chrome Web Store and AMO. See [docs/releasing.md](docs/releasing.md).
+Automated with [git-cliff](https://git-cliff.org) and a release PR: merging the release PR publishes to the Chrome Web Store and AMO. See [docs/releasing.md](docs/releasing.md).
 
 ### Publishing to addons.mozilla.org by hand
 
