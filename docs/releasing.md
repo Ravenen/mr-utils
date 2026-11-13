@@ -17,14 +17,13 @@
    - `feat!:` або футер `BREAKING CHANGE:` → мажорна (2.0.0 → 3.0.0);
    - футер `Release-As: x.y.z` задає версію явно (так перший реліз стане 2.0.0);
    - `docs:`, `test:`, `ci:`, `chore:` версію не змінюють і в CHANGELOG не потрапляють.
-2. **Release PR.** Після кожного пушу в `main` workflow **Release** (`.github/workflows/release.yml`) запускає [release-please](https://github.com/googleapis/release-please). Той відкриває або оновлює PR з назвою на кшталт `chore(main): release 2.0.0`. У ньому:
+2. **Release PR.** Після кожного пушу в `main` workflow **Release** (`.github/workflows/release.yml`) запускає `scripts/release-pr.sh`. Скрипт бере всі коміти від останнього тегу (`git log vX.Y.Z..HEAD`), рахує з них нову версію і розділ CHANGELOG ([git-cliff](https://git-cliff.org), налаштування в `cliff.toml`) і відкриває або оновлює PR `chore(release): X.Y.Z` з гілки `release/next`. У ньому:
    - `version` у `package.json` (manifest бере версію звідти);
-   - нові записи в `CHANGELOG.md`, згруповані за типом комітів;
-   - `.release-please-manifest.json` з новою версією.
+   - новий розділ угорі `CHANGELOG.md`, згрупований за типом комітів.
 
-   Поки PR не злитий, кожен новий коміт у `main` додається до нього, а версія за потреби перераховується. Release PR — це просто «кошик» змін до наступного релізу.
+   Поки PR не злитий, кожен новий коміт у `main` перебудовує його з нуля, а версія за потреби перераховується. Release PR — це просто «кошик» змін до наступного релізу. Якщо від останнього тегу немає комітів, що потрапляють у CHANGELOG, PR не відкривається.
 3. **Злиття release PR — це і є реліз.** Той самий workflow:
-   - ставить тег `vX.Y.Z` і створює GitHub Release з текстом із CHANGELOG;
+   - бачить у `package.json` версію, для якої ще немає тегу, ставить тег `vX.Y.Z` і створює GitHub Release з текстом її розділу CHANGELOG;
    - запускає lint, typecheck і тести, збирає Chrome і Firefox;
    - перевіряє, що sources zip відтворює Firefox-збірку (`scripts/verify-sources.sh`);
    - прикріплює до GitHub Release `mrflow-X.Y.Z-chrome.zip`, `-firefox.zip` і `-sources.zip`;
@@ -41,48 +40,31 @@
 4. За кілька хвилин перевірити: вкладка **Actions** → **Release** зелений, у **Releases** з'явилась версія з трьома zip, у дашбордах магазинів нова версія стоїть на рев'ю.
 
 **Один раз (налаштування):**
-1. Дозволити GitHub Actions створювати PR: репозиторій → **Settings** → **Actions** → **General** → **Workflow permissions** → увімкнути **Allow GitHub Actions to create and approve pull requests** → **Save**. Без цього release-please не відкриє release PR.
-2. Зливати PR через **rebase**, а не merge-комітом: **Settings** → **General** → **Pull Requests** → вимкнути **Allow merge commits**, лишити **Allow rebase merging**. Там само увімкнути **Automatically delete head branches**: тоді після злиття PR GitHub сам перемикає PR, що стояли на його гілці, на `main`, а не закриває їх (див. «Каскадні PR»). Чому без merge-комітів — нижче, «Чому тільки rebase».
+1. Дозволити GitHub Actions створювати PR: репозиторій → **Settings** → **Actions** → **General** → **Workflow permissions** → увімкнути **Allow GitHub Actions to create and approve pull requests** → **Save**. Без цього workflow не відкриє release PR.
+2. **Settings** → **General** → **Pull Requests**: лишити **Allow merge commits** (як зливати — нижче, «Злиття PR і каскади») і увімкнути **Automatically delete head branches**: тоді після злиття PR GitHub сам перемикає PR, що стояли на його гілці, на `main`, а не закриває їх.
 3. Додати ключі магазинів (нижче).
 4. Перевірити ключі ще до першого релізу (нижче, «Перевірка без релізу»).
 
-## Чому тільки rebase
+## Злиття PR і каскади
 
-Release-please бере в CHANGELOG кожен коміт з історії `main`, а повідомлення коміту ділить на кілька записів, якщо після порожнього рядка починається абзац на кшталт `feat: ...` чи `fix: ...` (так можна описати кілька змін в одному коміті). Merge-коміт GitHub має вигляд:
+PR зливаються звичайним **Create a merge commit**. У CHANGELOG потрапляють коміти всередині PR, по одному запису на коміт з типом `feat`, `fix`, `perf`, `refactor`, `style` або `build`. Сам merge-коміт (`Merge pull request #N …`) пропускається, тож назва PR може бути будь-якою і дублікатів не дає.
 
-```
-Merge pull request #48 from Ravenen/claude/mrflow-hunk-nav-2
+Каскад (PR A на `main`, PR B на гілці A) зливається по черзі знизу вгору, без перебазування:
+1. Злити A. Її коміти потрапляють у `main` з тими самими SHA.
+2. GitHub сам перемикає базу B на `main` (з **Automatically delete head branches**; інакше змінити базу вручну кнопкою **Edit** біля назви PR **до** видалення гілки A, бо після видалення GitHub закриє B). У B лишаються тільки її власні коміти.
+3. Дочекатися CI на B і злити її. Для довшого каскаду — так само далі.
 
-feat: collapse viewed hunks, hunks-left counter, Shift+] / Shift+[ navigation
-```
+Оновлювати гілку PR свіжим `main` можна кнопкою **Update branch** або `git merge origin/main`: такі merge-коміти теж пропускаються.
 
-Перший рядок release-please пропускає, а другий абзац (назва PR) стає записом поруч із самими комітами PR, які теж є в історії. Звідси дублікати в 2.0.0, прибрані вручну комітом `5c252a1`.
+### Чому git-cliff, а не release-please
 
-Squash теж не підходить: у CHANGELOG потрапляє лише назва PR, а не кожен коміт, і каскад після squash перебазовується з конфліктами (коміти нижнього PR у `main` злиті в один, git їх не впізнає).
+До 2.1.1 релізи робив [release-please](https://github.com/googleapis/release-please). Він розрахований на squash-злиття, а з merge-комітами має дві вади, які не вимикаються налаштуваннями:
+- **Дублікати.** Він ділить повідомлення коміту на кілька записів за абзацами `feat: …`, а GitHub пише назву PR другим абзацом merge-коміту. Звідси подвійні записи в 2.0.0, прибрані вручну комітом `5c252a1`.
+- **Загублені коміти.** Він іде історією `main` у порядку, який віддає GitHub (за датою коміту), і зупиняється на коміті попереднього релізу. Коміти PR, створені до цього релізу, а злиті після, лишаються за ним і не потрапляють ні в CHANGELOG, ні в розрахунок версії.
 
-Rebase кладе в `main` копії комітів PR (з новими SHA, але з тими самими змінами), без merge-коміту: кожен коміт — один запис.
+git-cliff бере діапазон `останній тег..HEAD` за графом комітів, тож дати не мають значення, а merge-коміти пропускає правило в `cliff.toml`.
 
-## Каскадні PR
-
-Каскад: PR A на `main`, PR B на гілці A (B містить коміти A і свої). Є два способи його злити, обидва без дублікатів.
-
-**Знизу вгору, по одному PR** (коли A можна випустити без B):
-1. Злити A через **Rebase and merge**. У `main` з'являються копії комітів A з новими SHA; у гілці B лишаються старі.
-2. База B має стати `main`. З **Automatically delete head branches** GitHub перемикає її сам. Інакше змінити базу вручну (**Edit** біля назви PR B) **до** видалення гілки A: якщо видалити гілку A раніше, GitHub закриє B.
-3. Перебазувати B на `main` і запушити:
-   ```bash
-   git fetch origin
-   git switch <гілка B>
-   git rebase origin/main
-   git push --force-with-lease
-   ```
-   Git сам пропускає коміти, зміни яких уже є в `main` («skipped previously applied commit»), тож у B лишаються лише його коміти. Не тиснути «Update branch» з merge-комітом і не робити `git merge main`: тоді в B з'являються merge-коміти.
-   - Якщо A змінювали після того, як від неї відгалузили B, а B на нову A не перебазували, зміни вже не збігаються і git їх не пропустить (будуть конфлікти). Тоді вказати, де закінчувалась A: `git rebase --onto origin/main <останній коміт A в гілці B>`. Цей коміт видно в `git log` гілки B (останній з комітів A перед першим комітом B).
-4. Дочекатися CI на B і злити її так само. Для довшого каскаду — повторити для наступного PR.
-
-**Згори вниз, весь каскад разом** (коли каскад переглянули повністю):
-1. Злити B в гілку A через **Rebase and merge** (база B — гілка A). Історія лишається лінійною, merge-коміту немає.
-2. Злити A в `main` через **Rebase and merge**. Усі коміти A і B потрапляють у CHANGELOG по одному разу.
+Перевірити, що потрапить у наступний реліз, нічого не змінюючи: `scripts/release-pr.sh --dry-run`.
 
 ## Ключі магазинів
 
